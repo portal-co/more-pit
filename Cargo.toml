@@ -1,5 +1,5 @@
 [workspace]
-members=["pit-rust-generic"]
+members=[ "pit-c-generic","pit-rust-generic"]
 resolver="3"
 
 [workspace.dependencies]
@@ -7,4 +7,3 @@ pit-core = "0.4.2"
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
 syn = "2.0.101"
-hex = "0.4.3"

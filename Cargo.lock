@@ -108,6 +108,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pit-c-generic"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
+]
+
+[[package]]
 name = "pit-core"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
