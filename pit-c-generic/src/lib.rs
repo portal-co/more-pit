@@ -14,7 +14,7 @@ pub struct C<T, Kind> {
 pub struct PureC;
 #[macro_export]
 macro_rules! c_disp {
-    ($(<$($g:ident $(: $gp:path)?),*>)? [$k:ty] $t:ty => |$self:ident, $fmt:ident, $kind:ident|$a:expr) => {
+    ($(<$($g:ident $(: $gp:path)?),*>)? [$k:ty] $t:ty => |$self:pat_param, $fmt:pat_param, $kind:pat_param|$a:expr) => {
         impl $(<$($g : $($gp)?),*>)? $crate::__::core::fmt::Display for $crate::C<$t, $k> {
             fn fmt(
                 &self,
