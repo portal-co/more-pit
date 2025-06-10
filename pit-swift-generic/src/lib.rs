@@ -3,12 +3,13 @@
 use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use pit_core::{Arg, Interface, Sig};
 extern crate alloc;
+pub type TsOpts = SwiftOpts;
 #[derive(Default, Clone, Debug)]
 #[non_exhaustive]
-pub struct TsOpts {
+pub struct SwiftOpts {
     // pub rewrites: BTreeMap<[u8; 32], String>,
 }
-impl TsOpts {
+impl SwiftOpts {
     pub fn ty(&self, t: &Arg, this: [u8; 32]) -> String {
         match t {
             Arg::I32 => format!("UInt32"),
