@@ -1,5 +1,5 @@
 [workspace]
-members=[ "pit-c-generic","pit-rust-generic"]
+members=[ "pit-c-generic", "pit-go-generic", "pit-haxe-generic","pit-rust-generic", "pit-swift-generic", "pit-ts-generic"]
 resolver="3"
 
 [workspace.dependencies]

@@ -128,6 +128,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pit-go-generic"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
+]
+
+[[package]]
+name = "pit-haxe-generic"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
+]
+
+[[package]]
 name = "pit-rust-generic"
 version = "0.1.0"
 dependencies = [
@@ -136,6 +152,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "pit-swift-generic"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
+]
+
+[[package]]
+name = "pit-ts-generic"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
 ]
 
 [[package]]
