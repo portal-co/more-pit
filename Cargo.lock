@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "pit-c-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "pit-go-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "pit-haxe-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "pit-rust-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "pit-swift-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "pit-ts-generic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "hex",
  "pit-core",
