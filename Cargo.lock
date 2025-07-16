@@ -209,7 +209,7 @@ name = "pit-c-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -227,11 +227,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pit-core"
+version = "0.4.8"
+source = "git+https://github.com/portal-co/pit-core.git#51d37562072efcd9e105fde51eab67d119dfdec9"
+dependencies = [
+ "derive_more",
+ "hex",
+ "instability",
+ "nom",
+ "sha3",
+]
+
+[[package]]
 name = "pit-go-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -240,7 +252,7 @@ name = "pit-haxe-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -249,7 +261,7 @@ name = "pit-rust-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
  "proc-macro2",
  "quote",
@@ -261,7 +273,7 @@ name = "pit-swift-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -270,7 +282,7 @@ name = "pit-to-capnp"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
  "sha3",
 ]
@@ -280,7 +292,7 @@ name = "pit-ts-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -289,7 +301,7 @@ name = "pit-wit-bridge"
 version = "0.1.0"
 dependencies = [
  "nom",
- "pit-core",
+ "pit-core 0.4.8 (git+https://github.com/portal-co/pit-core.git)",
  "portal-solutions-sdk",
 ]
 
@@ -302,7 +314,7 @@ dependencies = [
  "instability",
  "itertools",
  "nom",
- "pit-core",
+ "pit-core 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha3",
  "spin",
 ]

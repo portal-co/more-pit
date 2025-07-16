@@ -10,3 +10,6 @@ sha3 = { version = "0.10.8", default-features = false }
 portal-solutions-sdk = {workspace=true,optional = true}
 [features]
 unstable-sdk=["dep:portal-solutions-sdk"]
+unstable-pcode=["pit-core/unstable-pcode"]
+unstable-sdkcode=["unstable-sdk","unstable-pcode","portal-solutions-sdk/unstable-sdkcode"]
+unstable-generics=["pit-core/unstable-generics"]

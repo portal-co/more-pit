@@ -13,3 +13,6 @@ pit-core.workspace = true
 portal-solutions-sdk = {workspace=true,optional = true}
 [features]
 unstable-sdk=["dep:portal-solutions-sdk"]
+unstable-pcode=["pit-core/unstable-pcode"]
+unstable-sdkcode=["unstable-sdk","unstable-pcode","portal-solutions-sdk/unstable-sdkcode"]
+unstable-generics=["pit-core/unstable-generics"]
