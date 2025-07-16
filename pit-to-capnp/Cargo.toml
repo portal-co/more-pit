@@ -7,3 +7,6 @@ edition = "2024"
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pit-core.workspace = true
 sha3 = { version = "0.10.8", default-features = false }
+portal-solutions-sdk = {workspace=true,optional = true}
+[features]
+unstable-sdk=["dep:portal-solutions-sdk"]

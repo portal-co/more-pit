@@ -9,3 +9,6 @@ description = "Generic PIT bindings"
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 
 pit-core.workspace = true
+portal-solutions-sdk = {workspace=true,optional = true}
+[features]
+unstable-sdk=["dep:portal-solutions-sdk"]

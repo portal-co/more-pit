@@ -8,5 +8,6 @@ edition = "2024"
 nom = { version = "8", default-features = false, features = ["alloc"] }
 pit-core.workspace = true
 
-
+portal-solutions-sdk = {workspace=true,optional = true}
 [features]
+unstable-sdk=["dep:portal-solutions-sdk"]
