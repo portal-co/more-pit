@@ -1,0 +1,12 @@
+[package]
+name = "pit-wit-bridge"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+nom = { version = "8", default-features = false, features = ["alloc"] }
+pit-core.workspace = true
+
+
+[features]

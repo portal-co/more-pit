@@ -1,9 +1,11 @@
 [workspace]
-members=[ "pit-c-generic", "pit-go-generic", "pit-haxe-generic","pit-rust-generic", "pit-swift-generic", "pit-ts-generic"]
+members=[ "pit-c-generic", "pit-go-generic", "pit-haxe-generic","pit-rust-generic", "pit-swift-generic", "pit-to-capnp", "pit-ts-generic", "pit-wit-bridge"]
 resolver="3"
 
 [workspace.dependencies]
 pit-core = "^0.4.2"
+instability = "0.3.7"
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
 syn = "2.0.101"
+portal-solutions-sdk = {version="0.0.2",git="https://github.com/portal-co/portal-solutions-sdk.git"}

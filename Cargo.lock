@@ -163,10 +163,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pit-to-capnp"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pit-core",
+ "sha3",
+]
+
+[[package]]
 name = "pit-ts-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "pit-core",
+]
+
+[[package]]
+name = "pit-wit-bridge"
+version = "0.1.0"
+dependencies = [
+ "nom",
  "pit-core",
 ]
 
