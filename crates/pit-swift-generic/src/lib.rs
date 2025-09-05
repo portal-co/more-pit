@@ -53,7 +53,7 @@ impl SwiftOpts {
     pub fn interface(&self, i: &Interface) -> String {
         let this = i.rid();
         format!(
-            "protocol P{} {{{}}}",
+            "public protocol P{} {{{}}}",
             hex::encode(this),
             i.methods
                 .iter()

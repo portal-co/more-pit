@@ -102,7 +102,7 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
         }
     });
     quote! {
-        trait #x<'bound>: 'bound{
+        pub trait #x<'bound>: 'bound{
             type Error: #core::error::Error;
             #(#methods);*
         }

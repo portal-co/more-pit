@@ -51,7 +51,7 @@ impl TsOpts {
     pub fn interface(&self, i: &Interface) -> String {
         let this = i.rid();
         format!(
-            "type P{} = {{{}}}",
+            "export type P{} = {{{}}}",
             hex::encode(this),
             i.methods
                 .iter()
