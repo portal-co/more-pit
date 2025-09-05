@@ -53,11 +53,11 @@ impl SwiftOpts {
     pub fn interface(&self, i: &Interface) -> String {
         let this = i.rid();
         format!(
-            "public protocol P{} {{{}}}",
+            "open protocol P{} {{{}}}",
             hex::encode(this),
             i.methods
                 .iter()
-                .map(|(a, b)| format!("P{}_{a} {}", hex::encode(this), self.meth(b, this)))
+                .map(|(a, b)| format!("open P{}_{a} {}", hex::encode(this), self.meth(b, this)))
                 .collect::<Vec<_>>()
                 .join("")
         )
