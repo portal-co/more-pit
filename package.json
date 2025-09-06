@@ -1,1 +1,8 @@
-{"name":"@portal-solutions/more-pit","workspaces":[],"devDependencies":{"typescript":"^5.9.2","zshy":"^0.4.1"}}
+{
+  "name": "@portal-solutions/more-pit",
+  "workspaces": [],
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "zshy": "^0.4.1"
+  }
+}
