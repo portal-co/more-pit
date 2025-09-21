@@ -9,7 +9,9 @@ pub struct Params {
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 #[non_exhaustive]
-pub struct FeatureFlags {}
+pub struct FeatureFlags {
+    pub specialization: bool,
+}
 pub fn arg(p: &Params, a: &Arg, root: [u8; 32]) -> TokenStream {
     let core = &p.core;
     let asyncness = &p.asyncness;
@@ -27,20 +29,30 @@ pub fn arg(p: &Params, a: &Arg, root: [u8; 32]) -> TokenStream {
             let x = match ty {
                 pit_core::ResTy::None => {
                     return quote! {
-                        impl #core::any::Any + 'bound
+                        impl #core::marker::Sized + 'bound
                     };
                 }
                 pit_core::ResTy::Of(a) => *a,
                 pit_core::ResTy::This => root,
                 _ => {
-                    return quote! {
-                        #core::convert::Infallible
-                    };
+                    if p.flags.specialization {
+                        return quote! {
+                            impl #core::marker::Sized + 'bound
+                        };
+                    } else {
+                        return quote! {
+                            #core::convert::Infallible
+                        };
+                    }
                 }
             };
             let x = hex::encode(&x);
             let x = format_ident!(
-                "P{}{x}",
+                "P{}{}{x}",
+                match p.flags.specialization {
+                    false => "",
+                    true => "S",
+                },
                 match asyncness.as_ref() {
                     None => "",
                     Some(_) => "async",
@@ -61,9 +73,17 @@ pub fn arg(p: &Params, a: &Arg, root: [u8; 32]) -> TokenStream {
             }
             a
         }
-        _ => quote! {
-            #core::convert::Infallible
-        },
+        _ => {
+            if p.flags.specialization {
+                return quote! {
+                    impl #core::marker::Sized + 'bound
+                };
+            } else {
+                return quote! {
+                    #core::convert::Infallible
+                };
+            }
+        }
     }
 }
 pub fn sig(p: &Params, s: &Sig, root: [u8; 32]) -> TokenStream {
@@ -85,26 +105,63 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
     let asyncness = &p.asyncness;
     let x = hex::encode(&root);
     let x = format_ident!(
-        "P{}{x}",
+        "P{}{}{x}",
+        match p.flags.specialization {
+            false => "",
+            true => "S",
+        },
         match asyncness.as_ref() {
             None => "",
             Some(_) => "async",
         }
     );
+    let xe = format_ident!("{x}Error");
     let core = &p.core;
 
-    let methods = i.methods.iter().map(|(a, b)| {
-        let asyncness = asyncness.iter();
-        let a = format_ident!("{a}");
-        let b = sig(p, b, root);
-        quote! {
-            #(#asyncness)* fn  #a #b
+    let methods = i
+        .methods
+        .iter()
+        .map(|(a, b)| {
+            let asyncness = asyncness.iter();
+            let a = format_ident!("{a}");
+            let b = sig(p, b, root);
+            quote! {
+                #(#asyncness)* fn  #a #b
+            }
+        })
+        .collect::<Vec<_>>();
+    let spec = match p.flags.specialization {
+        false => quote! {},
+        true => {
+            let method_impls = methods.iter().map(|a| {
+                quote! {
+                    #a {
+                        return #core::result::Result::Err(#xe{})
+                    }
+                }
+            });
+            quote! {
+                const _: () = {
+                    default impl<'bound,T: #core::marker::Sized> #x<'bound> for T{
+                        type Error = #xe;
+                        #(#method_impls);*
+                    }
+                }
+            }
         }
-    });
+    };
     quote! {
+        #[derive(#core::Clone,#core::Copy,#core::Debug)]
+        struct #xe{}
+        impl #core::fmt::Display for #xe{
+            fn fmt(&self, a: &mut #core::fmt::Formatter) -> #core::fmt::Result{
+                #core::fmt::Result::Ok(())
+            }
+        }
         pub trait #x<'bound>: 'bound{
             type Error: #core::error::Error;
             #(#methods);*
         }
+        #spec
     }
 }
