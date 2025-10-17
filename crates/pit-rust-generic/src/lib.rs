@@ -142,7 +142,7 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
             });
             quote! {
                 const _: () = {
-                    default impl<'bound,T: #core::marker::Sized> #x<'bound> for T{
+                    default impl<'bound,T: #core::marker::Sized + 'bound> #x<'bound> for T{
                         type Error = #xe;
                         #(#method_impls);*
                     }
@@ -153,11 +153,14 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
     quote! {
         #[derive(#core::Clone,#core::Copy,#core::Debug)]
         struct #xe{}
-        impl #core::fmt::Display for #xe{
-            fn fmt(&self, a: &mut #core::fmt::Formatter) -> #core::fmt::Result{
-                #core::fmt::Result::Ok(())
+        const _: () = {
+            impl #core::fmt::Display for #xe{
+                fn fmt(&self, a: &mut #core::fmt::Formatter) -> #core::fmt::Result{
+                    #core::fmt::Result::Ok(())
+                }
             }
-        }
+            impl #core::error::Error for #xe{}
+        };
         pub trait #x<'bound>: 'bound{
             type Error: #core::error::Error;
             #(#methods);*
