@@ -1,5 +1,4 @@
 #![no_std]
-
 use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use pit_core::{Arg, Interface, Sig};
 extern crate alloc;
@@ -23,7 +22,7 @@ impl HaxeOpts {
             } => match ty {
                 pit_core::ResTy::None => format!("Dynamic"),
                 pit_core::ResTy::Of(a) => format!(
-                     "{}.P{}",
+                    "{}.P{}",
                     match self.rewrites.get(a) {
                         None => format!("pit{}", hex::encode(a)),
                         Some(b) => b.clone(),
@@ -48,8 +47,8 @@ impl HaxeOpts {
             s.rets
                 .iter()
                 .map(|x| self.ty(x, this))
-                 .enumerate()
-                 .map(|(a,b)|format!("r{a}: {b}"))
+                .enumerate()
+                .map(|(a, b)| format!("r{a}: {b}"))
                 .collect::<Vec<_>>()
                 .join(",")
         )

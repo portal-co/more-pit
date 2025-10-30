@@ -1,5 +1,4 @@
 #![no_std]
-
 use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use pit_core::{Arg, Interface, Sig};
 extern crate alloc;
@@ -30,13 +29,15 @@ impl TsOpts {
                 pit_core::ResTy::Of(a) => format!("{m}P{}", hex::encode(a)),
                 pit_core::ResTy::This => format!("{m}P{}", hex::encode(this)),
                 _ => todo!(),
-            }{
-                ty => if *nullable{
-                    format!("{ty} | undefined")
-                }else{
-                    ty
+            } {
+                ty => {
+                    if *nullable {
+                        format!("{ty} | undefined")
+                    } else {
+                        ty
+                    }
                 }
-            }
+            },
             _ => todo!(),
         }
     }

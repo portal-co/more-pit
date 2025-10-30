@@ -117,7 +117,6 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
     );
     let xe = format_ident!("{x}Error");
     let core = &p.core;
-
     let methods = i
         .methods
         .iter()

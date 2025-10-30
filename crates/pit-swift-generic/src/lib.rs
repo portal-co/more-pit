@@ -1,5 +1,4 @@
 #![no_std]
-
 use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use pit_core::{Arg, Interface, Sig};
 extern crate alloc;
@@ -23,10 +22,7 @@ impl SwiftOpts {
                 ann,
             } => match ty {
                 pit_core::ResTy::None => format!("Any"),
-                pit_core::ResTy::Of(a) => format!(
-                    "any P{}",
-                    hex::encode(a)
-                ),
+                pit_core::ResTy::Of(a) => format!("any P{}", hex::encode(a)),
                 pit_core::ResTy::This => format!("any P{}", hex::encode(this)),
                 _ => todo!(),
             },
@@ -44,7 +40,7 @@ impl SwiftOpts {
                 .join(","),
             s.rets
                 .iter()
-              .enumerate()
+                .enumerate()
                 .map(|(a, b)| format!("r{a} _: {}", self.ty(b, this)))
                 .collect::<Vec<_>>()
                 .join(",")

@@ -1,7 +1,6 @@
 #![no_std]
 extern crate alloc;
 use core::fmt::{Display, Formatter};
-
 pub trait ToWIT {
     fn to_wit(&self, f: &mut Formatter<'_>) -> core::fmt::Result;
 }
