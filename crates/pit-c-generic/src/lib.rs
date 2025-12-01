@@ -1,19 +1,88 @@
+//! # pit-c-generic
+//!
+//! Code generator for C header macros from PIT (Portal Interface Types) interfaces.
+//!
+//! This `no_std` compatible crate generates C preprocessor macros from PIT interface definitions.
+//! The generated C code uses the `vfunc` macro pattern for virtual function tables, enabling
+//! runtime polymorphism in C.
+//!
+//! ## Overview
+//!
+//! The main types are:
+//! - [`C`] - A wrapper that pairs a value with a rendering context (kind)
+//! - [`PureC`] - A context type for rendering C code
+//! - [`c_disp!`] - A macro for implementing `Display` for wrapped types
+//!
+//! ## Generated Code Pattern
+//!
+//! The generated macros define:
+//! - `<prefix><hex_id>_t_IFACE_<method>` - Per-method interface macro
+//! - `<prefix><hex_id>_t_IFACE` - Combined interface macro
+//! - `interface(<prefix><hex_id>_t)` - Interface instantiation
+//!
+//! ## Example
+//!
+//! ```ignore
+//! use pit_c_generic::{C, PureC};
+//! use pit_core::Interface;
+//! use std::fmt::Write;
+//!
+//! let iface: Interface = /* parse from PIT format */;
+//! let c = C { value: &iface, kind: PureC { cx: "my_" } };
+//! println!("{}", c);
+//! ```
+//!
+//! ## Features
+//!
+//! - `unstable-sdk` - Enable portal-solutions-sdk integration
+//! - `unstable-pcode` - Enable pcode expression support
+//! - `unstable-generics` - Enable generic parameter support
+
 #![no_std]
 pub mod __ {
+    //! Internal module re-exporting core for use in macros.
     pub use core;
 }
 use core::{fmt::Display, marker::PhantomData};
 extern crate alloc;
+
+/// A wrapper that pairs a value with a rendering context.
+///
+/// Used to implement `Display` for types that need additional context
+/// to render properly (such as a prefix or configuration options).
+///
+/// # Type Parameters
+///
+/// * `T` - The wrapped value type
+/// * `Kind` - The context/configuration type
 // #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct C<T, Kind> {
+    /// The wrapped value to be rendered.
     pub value: T,
+    /// The rendering context/configuration.
     pub kind: Kind,
 }
+
+/// A simple context type for C code generation.
+///
+/// Contains a configurable prefix used when generating type names.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct PureC<T> {
+    /// The prefix to use for generated type names.
     pub cx: T,
 }
+
+/// Macro for implementing `Display` on [`C`]-wrapped types.
+///
+/// This macro generates `Display` implementations for both owned and borrowed
+/// values wrapped in [`C`], enabling uniform formatting regardless of ownership.
+///
+/// # Syntax
+///
+/// ```ignore
+/// c_disp!(<T: Display>[Kind] ValueType => |self, fmt, kind| { /* format expression */ });
+/// ```
 #[macro_export]
 macro_rules! c_disp {
     ($(<$($g:ident $(: $gp:path)?),*>)? [$k:ty] $t:ty => |$self:pat_param, $fmt:pat_param, $kind:pat_param|$a:expr) => {
