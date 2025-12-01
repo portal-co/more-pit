@@ -39,7 +39,7 @@ PIT interfaces follow this structure (see [pit-core SPEC.md](https://github.com/
 ```
 
 ### Primitive Types
-- `I32`, `I64` - 32/64-bit unsigned integers
+- `I32`, `I64` - 32/64-bit integers
 - `F32`, `F64` - 32/64-bit floating point numbers
 
 ### Resource Types

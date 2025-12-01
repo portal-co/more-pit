@@ -20,8 +20,8 @@ PIT files define interfaces using a compact, parseable syntax. Each file typical
 
 ### Primitive Types
 
-- `I32` - 32-bit unsigned integer
-- `I64` - 64-bit unsigned integer
+- `I32` - 32-bit integer
+- `I64` - 64-bit integer
 - `F32` - 32-bit floating point
 - `F64` - 64-bit floating point
 
