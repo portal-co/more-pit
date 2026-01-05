@@ -222,7 +222,7 @@ dependencies = [
 [[package]]
 name = "pit-core"
 version = "0.4.9"
-source = "git+https://github.com/portal-co/pit-core.git#09c6eec9a056da4cb48348045e3cf0c6c6e02bb3"
+source = "git+https://github.com/portal-co/pit-core.git#dfe64118da90f97bcf09d216b04189d2070473cb"
 dependencies = [
  "base64",
  "derive_more",
@@ -302,7 +302,7 @@ dependencies = [
 [[package]]
 name = "portal-solutions-sdk"
 version = "0.0.2"
-source = "git+https://github.com/portal-co/portal-solutions-sdk.git#19062e42cb235bf6d873862d624a1ad767e972be"
+source = "git+https://github.com/portal-co/portal-solutions-sdk.git#5480143b8249c022915a89e035217b5aea4d9902"
 dependencies = [
  "hex",
  "instability",
