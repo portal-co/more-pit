@@ -302,7 +302,7 @@ dependencies = [
 [[package]]
 name = "portal-solutions-sdk"
 version = "0.0.2"
-source = "git+https://github.com/portal-co/portal-solutions-sdk.git#5480143b8249c022915a89e035217b5aea4d9902"
+source = "git+https://github.com/portal-co/portal-solutions-sdk.git#8b47bc38acdb982c2d06eaac409e96847c028fbf"
 dependencies = [
  "hex",
  "instability",
