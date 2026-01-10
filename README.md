@@ -117,3 +117,12 @@ MPL-2.0 (see individual crate Cargo.toml files)
 
 - [pit-core](https://github.com/portal-co/pit-core) - Core PIT parsing and data structures
 - [portal-solutions-sdk](https://github.com/portal-co/portal-solutions-sdk) - Portal Solutions SDK
+
+## Goals
+- [ ] Add project goals
+
+## Progress
+- [ ] Initial setup
+
+---
+*AI assisted*
