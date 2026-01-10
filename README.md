@@ -119,10 +119,11 @@ MPL-2.0 (see individual crate Cargo.toml files)
 - [portal-solutions-sdk](https://github.com/portal-co/portal-solutions-sdk) - Portal Solutions SDK
 
 ## Goals
-- [ ] Add project goals
+- [ ] Generate bindings for multiple languages
+- [ ] Support generic `pit` definitions
 
 ## Progress
-- [ ] Initial setup
+- [ ] Workspace setup with many language crates
 
 ---
 *AI assisted*
