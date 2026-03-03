@@ -1,0 +1,17 @@
+[package]
+name = "pit-lang-generic"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "Unified PIT code-generator backend for C, Go, Haxe, TypeScript, and Swift"
+
+[dependencies]
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+pit-core.workspace = true
+portal-solutions-sdk = { workspace = true, optional = true }
+
+[features]
+unstable-sdk     = ["dep:portal-solutions-sdk"]
+unstable-pcode   = ["pit-core/unstable-pcode"]
+unstable-sdkcode = ["unstable-sdk", "unstable-pcode", "portal-solutions-sdk/unstable-sdkcode"]
+unstable-generics = ["pit-core/unstable-generics"]

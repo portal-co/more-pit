@@ -214,8 +214,7 @@ dependencies = [
 name = "pit-c-generic"
 version = "0.1.0"
 dependencies = [
- "hex",
- "pit-core",
+ "pit-lang-generic",
  "portal-solutions-sdk",
 ]
 
@@ -236,13 +235,20 @@ dependencies = [
 name = "pit-go-generic"
 version = "0.1.0"
 dependencies = [
- "hex",
- "pit-core",
+ "pit-lang-generic",
  "portal-solutions-sdk",
 ]
 
 [[package]]
 name = "pit-haxe-generic"
+version = "0.1.0"
+dependencies = [
+ "pit-lang-generic",
+ "portal-solutions-sdk",
+]
+
+[[package]]
+name = "pit-lang-generic"
 version = "0.1.0"
 dependencies = [
  "hex",
@@ -266,8 +272,7 @@ dependencies = [
 name = "pit-swift-generic"
 version = "0.1.0"
 dependencies = [
- "hex",
- "pit-core",
+ "pit-lang-generic",
  "portal-solutions-sdk",
 ]
 
@@ -285,8 +290,7 @@ dependencies = [
 name = "pit-ts-generic"
 version = "0.1.0"
 dependencies = [
- "hex",
- "pit-core",
+ "pit-lang-generic",
  "portal-solutions-sdk",
 ]
 
