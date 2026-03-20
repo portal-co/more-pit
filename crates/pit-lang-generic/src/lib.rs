@@ -3,18 +3,21 @@
 //! Unified code-generator backend for PIT (Portal Interface Types) interfaces targeting
 //! **C**, **Go**, **Haxe**, **TypeScript**, and **Swift**.
 //!
-//! All four OOP-style backends (Go, Haxe, TypeScript, Swift) are unified under a single
-//! [`Opts<S>`] type parameterised by a [`Syntax`] implementation.  The C backend keeps its
-//! own [`c`] sub-module because it uses a structurally different `Display`-based rendering
-//! pipeline.
+//! All backends are unified under a single [`Opts<S>`] type parameterised by a [`Syntax`]
+//! implementation.  The [`C`] syntax re-uses the [`c`] sub-module's `Display`-based
+//! rendering pipeline so no intermediate [`String`] allocations occur during C output.
 //!
 //! ## Quick start
 //!
 //! ```ignore
-//! use pit_lang_generic::{Opts, Go, Haxe, TypeScript, TypeScriptAsync, Swift};
+//! use pit_lang_generic::{Opts, C, Go, Haxe, TypeScript, TypeScriptAsync, Swift};
 //! use pit_core::Interface;
 //!
 //! let iface: Interface = /* … */;
+//!
+//! // C (Display-based, no intermediate String allocations)
+//! let code = Opts::<C>::default().interface(&iface);
+//! println!("{code}");
 //!
 //! // Go
 //! let code = Opts::<Go>::default().interface(&iface);
@@ -33,16 +36,7 @@
 //! ```
 //!
 //! Package rewrites (Go / Haxe) are set on [`Opts::rewrites`].
-//!
-//! ## C backend
-//!
-//! ```ignore
-//! use pit_lang_generic::c::{C, PureC};
-//! use pit_core::Interface;
-//!
-//! let iface: Interface = /* … */;
-//! println!("{}", C { value: &iface, kind: PureC { cx: "my_" } });
-//! ```
+//! The C prefix is set on [`C::prefix`].
 //!
 //! ## Feature flags
 //!
@@ -56,7 +50,8 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
+use alloc::{collections::btree_map::BTreeMap, format, string::{String, ToString}, vec::Vec};
+use core::fmt::Display;
 use pit_core::{Arg, Interface, ResTy, Sig};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,15 +69,20 @@ pub mod c;
 /// Implement this trait to add support for a new target language.
 /// Three methods map the three levels of a PIT interface hierarchy:
 /// argument type → method signature → full interface declaration.
+///
+/// Return types are `impl Display` rather than `String` so that implementations
+/// can avoid intermediate heap allocations (as [`C`] does via the [`c`] module's
+/// wrapper types).  Implementations that build strings internally simply return
+/// the `String` directly since `String: Display`.
 pub trait Syntax: Default + Clone + core::fmt::Debug {
-    /// Render a single argument type to a [`String`].
+    /// Render a single argument type as a [`Display`] value.
     ///
     /// * `opts`    – the enclosing [`Opts`], giving access to `rewrites`
     /// * `arg`     – the PIT argument to render
     /// * `this`    – resource ID of the enclosing interface (needed for `ResTy::This`)
-    fn render_ty(opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String;
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a;
 
-    /// Render a complete method signature to a [`String`].
+    /// Render a complete method signature as a [`Display`] value.
     ///
     /// The default implementation calls [`Self::render_ty`] for every parameter
     /// and return type; override only when the overall signature shape differs.
@@ -90,13 +90,13 @@ pub trait Syntax: Default + Clone + core::fmt::Debug {
     /// * `opts` – the enclosing [`Opts`]
     /// * `sig`  – the PIT method signature
     /// * `this` – resource ID of the enclosing interface
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String;
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a;
 
-    /// Render a complete interface declaration to a [`String`].
+    /// Render a complete interface declaration as a [`Display`] value.
     ///
     /// * `opts`  – the enclosing [`Opts`]
     /// * `iface` – the PIT interface
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String;
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ pub trait Syntax: Default + Clone + core::fmt::Debug {
 ///
 /// `S` implements [`Syntax`] and encodes all language-specific rendering rules.
 /// `rewrites` applies to languages whose resource-type references span packages
-/// (Go and Haxe); it is ignored by Swift / TypeScript which have no package system.
+/// (Go and Haxe); it is ignored by C / Swift / TypeScript which have no package system.
 ///
 /// # Constructing
 ///
@@ -118,6 +118,10 @@ pub trait Syntax: Default + Clone + core::fmt::Debug {
 /// // With rewrites
 /// let mut opts = Opts::<Go>::default();
 /// opts.rewrites.insert(some_rid, "mypkg".into());
+///
+/// // C with a custom prefix
+/// let mut opts = Opts::<C>::default();
+/// opts.syntax.prefix = "my_".into();
 /// ```
 #[derive(Default, Clone, Debug)]
 #[non_exhaustive]
@@ -127,33 +131,42 @@ pub struct Opts<S: Syntax> {
     /// Used by [`Go`] and [`Haxe`].  Other backends ignore this field.
     pub rewrites: BTreeMap<[u8; 32], String>,
 
-    /// The [`Syntax`] instance.  Because all current syntax types are zero-sized,
-    /// this is a `PhantomData`-equivalent that carries `S`'s impl at zero cost.
+    /// The [`Syntax`] instance.  Zero-sized for most backends; holds [`C::prefix`]
+    /// for the C backend.
     pub syntax: S,
 }
 
 impl<S: Syntax> Opts<S> {
-    /// Convert a PIT argument type to its target-language string.
+    /// Convert a PIT argument type to its target-language representation.
+    ///
+    /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
+    /// [`String`] is strictly required.
     ///
     /// Delegates to [`Syntax::render_ty`].
     #[inline]
-    pub fn ty(&self, arg: &Arg, this: [u8; 32]) -> String {
+    pub fn ty<'a>(&'a self, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         S::render_ty(self, arg, this)
     }
 
-    /// Convert a PIT method signature to its target-language string.
+    /// Convert a PIT method signature to its target-language representation.
+    ///
+    /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
+    /// [`String`] is strictly required.
     ///
     /// Delegates to [`Syntax::render_meth`].
     #[inline]
-    pub fn meth(&self, sig: &Sig, this: [u8; 32]) -> String {
+    pub fn meth<'a>(&'a self, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         S::render_meth(self, sig, this)
     }
 
-    /// Convert a PIT interface to a complete target-language declaration string.
+    /// Convert a PIT interface to a complete target-language declaration.
+    ///
+    /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
+    /// [`String`] is strictly required.
     ///
     /// Delegates to [`Syntax::render_interface`].
     #[inline]
-    pub fn interface(&self, iface: &Interface) -> String {
+    pub fn interface<'a>(&'a self, iface: &'a Interface) -> impl Display + 'a {
         S::render_interface(self, iface)
     }
 }
@@ -180,6 +193,63 @@ fn rewrite_pkg<S: Syntax>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// C syntax
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// [`Syntax`] implementation for C.
+///
+/// Delegates to the [`c`] module's `Display`-based pipeline, so no intermediate
+/// [`String`] allocations occur for type / method / interface rendering.
+///
+/// Generated code uses C preprocessor macros:
+/// ```c
+/// #define <prefix><hex_id>_t_IFACE_method(CUR,METH)  vfunc(struct{…},METH,VSelf,…)
+/// #define <prefix><hex_id>_t_IFACE  …
+/// interface(<prefix><hex_id>_t)
+/// ```
+///
+/// Set [`C::prefix`] (via [`Opts::syntax`]) to customise the type-name prefix:
+/// ```ignore
+/// let mut opts = Opts::<C>::default();
+/// opts.syntax.prefix = "my_".into();
+/// println!("{}", opts.interface(&iface));
+/// ```
+#[derive(Default, Clone, Debug)]
+pub struct C {
+    /// Prefix prepended to every generated C type name (maps to [`c::PureC::cx`]).
+    pub prefix: String,
+}
+
+impl Syntax for C {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, _this: [u8; 32]) -> impl Display + 'a {
+        c::C {
+            value: arg,
+            kind: c::PureC {
+                cx: opts.syntax.prefix.as_str(),
+            },
+        }
+    }
+
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, _this: [u8; 32]) -> impl Display + 'a {
+        c::C {
+            value: sig,
+            kind: c::PureC {
+                cx: opts.syntax.prefix.as_str(),
+            },
+        }
+    }
+
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
+        c::C {
+            value: iface,
+            kind: c::PureC {
+                cx: opts.syntax.prefix.as_str(),
+            },
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Go syntax
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -193,7 +263,7 @@ fn rewrite_pkg<S: Syntax>(
 pub struct Go;
 
 impl Syntax for Go {
-    fn render_ty(opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         match arg {
             Arg::I32 => format!("uint32"),
             Arg::I64 => format!("uint64"),
@@ -209,7 +279,7 @@ impl Syntax for Go {
         }
     }
 
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String {
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params = sig
             .params
             .iter()
@@ -220,13 +290,13 @@ impl Syntax for Go {
         let rets = sig
             .rets
             .iter()
-            .map(|a| opts.ty(a, this))
+            .map(|a| opts.ty(a, this).to_string())
             .collect::<Vec<_>>()
             .join(",");
         format!("({params}) ({rets})")
     }
 
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String {
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
         let methods = iface
@@ -253,7 +323,7 @@ impl Syntax for Go {
 pub struct Haxe;
 
 impl Syntax for Haxe {
-    fn render_ty(opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         match arg {
             Arg::I32 => format!("haxe.Int32"),
             Arg::I64 => format!("haxe.Int32"),
@@ -269,7 +339,7 @@ impl Syntax for Haxe {
         }
     }
 
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String {
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params = sig
             .params
             .iter()
@@ -287,7 +357,7 @@ impl Syntax for Haxe {
         format!("({params}): {{{rets}}}")
     }
 
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String {
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
         let methods = iface
@@ -341,11 +411,11 @@ impl TypeScript {
 }
 
 impl Syntax for TypeScript {
-    fn render_ty(opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         TypeScript::ty_inner(opts, arg, this, "")
     }
 
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String {
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params = sig
             .params
             .iter()
@@ -356,13 +426,13 @@ impl Syntax for TypeScript {
         let rets = sig
             .rets
             .iter()
-            .map(|a| opts.ty(a, this))
+            .map(|a| opts.ty(a, this).to_string())
             .collect::<Vec<_>>()
             .join(",");
         format!("({params}): [{rets}]")
     }
 
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String {
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
         let methods = iface
@@ -392,7 +462,7 @@ impl Syntax for TypeScript {
 pub struct TypeScriptAsync;
 
 impl Syntax for TypeScriptAsync {
-    fn render_ty(_opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String {
+    fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         // Delegate to the shared helper with the async "A" prefix.
         // We build a temporary sync Opts with no rewrites — rewrites are not used
         // by TypeScript's ty_inner, so this is always correct.
@@ -400,7 +470,7 @@ impl Syntax for TypeScriptAsync {
         TypeScript::ty_inner(&tmp, arg, this, "A")
     }
 
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String {
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params = sig
             .params
             .iter()
@@ -411,13 +481,13 @@ impl Syntax for TypeScriptAsync {
         let rets = sig
             .rets
             .iter()
-            .map(|a| opts.ty(a, this))
+            .map(|a| opts.ty(a, this).to_string())
             .collect::<Vec<_>>()
             .join(",");
         format!("({params}): [{rets}]| Promise<[{rets}]>")
     }
 
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String {
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
         let methods = iface
@@ -444,7 +514,7 @@ impl Syntax for TypeScriptAsync {
 pub struct Swift;
 
 impl Syntax for Swift {
-    fn render_ty(_opts: &Opts<Self>, arg: &Arg, this: [u8; 32]) -> String {
+    fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         match arg {
             Arg::I32 => format!("UInt32"),
             Arg::I64 => format!("UInt64"),
@@ -460,7 +530,7 @@ impl Syntax for Swift {
         }
     }
 
-    fn render_meth(opts: &Opts<Self>, sig: &Sig, this: [u8; 32]) -> String {
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params = sig
             .params
             .iter()
@@ -478,7 +548,7 @@ impl Syntax for Swift {
         format!("({params}) -> ({rets})")
     }
 
-    fn render_interface(opts: &Opts<Self>, iface: &Interface) -> String {
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
         let methods = iface
@@ -495,13 +565,15 @@ impl Syntax for Swift {
 // Convenience type aliases matching the old per-crate public API
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Type alias for C code generation options.
+pub type COpts      = Opts<C>;
 /// Type alias for Go code generation options.
-pub type GoOpts      = Opts<Go>;
+pub type GoOpts     = Opts<Go>;
 /// Type alias for Haxe code generation options.
-pub type HaxeOpts    = Opts<Haxe>;
+pub type HaxeOpts   = Opts<Haxe>;
 /// Type alias for TypeScript (sync) code generation options.
-pub type TsOpts      = Opts<TypeScript>;
+pub type TsOpts     = Opts<TypeScript>;
 /// Type alias for TypeScript (async) code generation options.
 pub type TsOptsAsync = Opts<TypeScriptAsync>;
 /// Type alias for Swift code generation options.
-pub type SwiftOpts   = Opts<Swift>;
+pub type SwiftOpts  = Opts<Swift>;
