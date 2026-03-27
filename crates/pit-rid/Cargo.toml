@@ -1,0 +1,13 @@
+[package]
+name = "pit-rid"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "Compute SHA3-256 RIDs for PIT interface files"
+
+[[bin]]
+name = "pit-rid"
+path = "src/main.rs"
+
+[dependencies]
+pit-core.workspace = true

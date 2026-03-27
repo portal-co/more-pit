@@ -21,6 +21,7 @@ For per-backend type mapping tables, see `references/backends.md`.
 crates/
   pit-lang-generic/   # Core multi-language backend (C, Go, Haxe, TypeScript, Swift)
   pit-rust-generic/   # Rust trait generator (proc-macro2 / quote)
+  pit-rid/            # Binary: compute SHA3-256 RIDs for .pit files
   pit-c-generic/      # Backwards-compat re-export → pit-lang-generic::c
   pit-go-generic/     # Backwards-compat re-export → pit-lang-generic
   pit-haxe-generic/   # Backwards-compat re-export → pit-lang-generic
@@ -29,8 +30,38 @@ crates/
   pit-to-capnp/       # Stub: Capnp trait + ViaCapnp Display wrapper (no logic yet)
   pit-wit-bridge/     # Stub: ToWIT trait + ViaWIT Display wrapper (no logic yet)
 pit/
-  common/             # Example .pit files: buffer, buffer64, reader, writer
+  common/             # Stable .pit files: buffer, buffer64, reader, writer
+  experimental/
+    os/               # Capability-based OS environment interfaces (experimental)
 ```
+
+---
+
+## Capability-Based Design Pattern
+
+The recommended pattern for OS and system operations in PIT: **one interface per capability group**, where each capability is a separate resource type that can be independently injected, stubbed, or audited. This mirrors the `os-env-traits` design.
+
+A component that needs file access takes `R<file-env-rid>` as a parameter — it holds a capability, rather than calling a global. This makes capabilities explicit, composable, and testable.
+
+The five capability groups in `pit/experimental/os/`:
+
+| Capability | File | `os-env-traits` equivalent |
+|------------|------|---------------------------|
+| Filesystem + env vars | `file-env.pit` | `FileEnv` |
+| Git operations | `git-env.pit` | `GitEnv` |
+| HTTP | `network-env.pit` | `NetworkEnv` |
+| GitHub API | `github-env.pit` | `GitHubEnv` |
+| AI content scan | `ai-env.pit` | `AiEnv` |
+
+These capability interfaces depend on data-type interfaces that model return shapes:
+`string-list.pit` (for `Vec<String>`), `dir-entry.pit` + `dir-walker.pit` (for directory walks), `github-file.pit` + `github-file-list.pit` (for GitHub file listings).
+
+**Type-system conventions for capability interfaces:**
+- Strings and bytes: `R<buffer-rid>&` borrowed for inputs, `R<buffer-rid>` owned for outputs
+- `Option<String>`: `R<buffer-rid>n` (nullable owned buffer)
+- `bool`: `I32` — 0/false, nonzero/true
+- `Vec<String>` or `Vec<T>`: a list interface with `len() -> I32` and `get(I32) -> R<item>`
+- Stateful iterator (unknown size): a walker interface with `next() -> R<item>n` — null signals end
 
 ---
 
@@ -169,8 +200,21 @@ There are no tests — verify output by calling `.to_string()` and inspecting th
 
 ---
 
+## RID Permanence — Core Design Principle
+
+**PIT has no versioning system. This is intentional.**
+
+- Generated type names (`P<64-hex-rid>`) are derived from the interface content. Generating code for a given RID will always produce the same type names — that's a feature.
+- **Once a RID is in production, the interface must be supported indefinitely.** Old generated code that imports `P<old-hex>` remains valid as long as implementations exist for it.
+- **To evolve, create a new interface** (new file, new methods, new RID). Migrate callers over time. Do not modify the old file.
+- **The experimental convention:** interfaces in `pit/experimental/` with `[experimental=true]` are still free to change. When ready to commit, create the stable version in `pit/common/` or `pit/stable/` without the attribute — this produces a new RID, which is the deliberate commitment.
+
+---
+
 ## Common Pitfalls
 
+- **Modifying a published `.pit` file** — changes its RID, silently breaks every consumer and every generated type name in every language
+- **Forgetting to rerun `pit-rid` after editing an experimental file** — dependent interfaces will embed stale RIDs
 - **Using re-export crates in new code** — depend on `pit-lang-generic` directly
 - **Empty `rewrites` for Go/Haxe** — cross-package resource refs render as bare hex IDs instead of qualified names
 - **`pit-to-capnp` / `pit-wit-bridge` have no implementation** — if you need Cap'n Proto or WIT output, you'll be writing it from scratch

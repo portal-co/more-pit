@@ -9,6 +9,7 @@ members = [
     "crates/pit-to-capnp",
     "crates/pit-ts-generic",
     "crates/pit-wit-bridge",
+    "crates/pit-rid",
 ]
 resolver = "3"
 

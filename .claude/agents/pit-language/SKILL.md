@@ -71,6 +71,42 @@ The RID is also why all generated type names across all backends embed the hex I
 
 ---
 
+## Computing RIDs with `pit-rid`
+
+The `pit-rid` CLI (in this workspace) computes the RID for one or more `.pit` files:
+
+```sh
+# Single file — bare hex output
+cargo run -p pit-rid -- path/to/interface.pit
+
+# Multiple files — "<hex>  <path>" per line (like md5sum)
+cargo run -p pit-rid -- a.pit b.pit c.pit
+
+# From stdin
+echo '{foo() -> ()}' | cargo run -p pit-rid
+```
+
+Use this any time you write a new `.pit` file that other interfaces will cross-reference — run `pit-rid` on it first to get its RID, then embed that RID in the dependent files.
+
+Note: `[experimental=true]` and any other interface-level attributes are part of the canonical form and therefore part of the RID. An experimental interface and its stable counterpart (same methods, attribute removed) are different interfaces with different RIDs.
+
+---
+
+## RID Permanence — No Versioning System
+
+**PIT has no version numbers. This is intentional.**
+
+A RID is derived from the interface's content. It is the interface's identity — not a handle that can be updated, not a name with a version tag. Consequences:
+
+- **Once used in production, an interface is permanent.** It must be supported indefinitely, even if deprecated. There is no mechanism to "retire" a RID that is in use.
+- **Evolution means a new interface.** Create a new file; it gets a new RID. Old consumers keep working against the old RID; new consumers use the new one.
+- **Never modify a published interface** — changing even whitespace or attribute order in the canonical form changes the RID, silently breaking every consumer and every generated type name in every language backend.
+- **Experimental** = `[experimental=true]` attribute + `pit/experimental/` directory. The interface has not yet been used in production; its definition can still change. Promoting to stable means creating a new file without the attribute, which produces a new RID — a deliberate commitment.
+
+The absence of a versioning system eliminates "v2 churn": there is no pressure to track version numbers or maintain compatibility matrices. An interface good enough to deploy is good enough to keep forever.
+
+---
+
 ## Info Files — Documentation Without Changing the RID
 
 Info files store documentation out-of-band, keyed by an existing RID, so you can annotate a published interface without changing its ID.
@@ -91,7 +127,9 @@ Merge semantics: same-name attributes are overwritten (last wins); all attribute
 
 ## Key Pitfalls
 
-- **Mutating a published interface changes its RID** — use Info files for documentation changes on stable interfaces
+- **Mutating a published interface changes its RID** — use Info files for documentation changes on stable interfaces; for method/signature changes, create a new interface
+- **`[experimental=true]` changes the RID** — experimental and stable forms of the "same" interface are different interfaces with different RIDs; this is intentional
+- **Forgetting to recompute `pit-rid` after editing an experimental file** — any dependent interfaces that embed the old RID will silently reference a non-existent definition
 - **`take: false` in `ArgTy::Resource` means borrowed** — the name is counterintuitive (`take=true` = owned/taken)
 - **`this` as a resource ID is only valid when an interface references itself** — using it elsewhere is an error
 - **The `unstable-*` features require opt-in** — gated with `#[instability::unstable]`, they'll warn on stable use

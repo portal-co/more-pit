@@ -257,6 +257,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pit-rid"
+version = "0.1.0"
+dependencies = [
+ "pit-core",
+]
+
+[[package]]
 name = "pit-rust-generic"
 version = "0.1.0"
 dependencies = [
