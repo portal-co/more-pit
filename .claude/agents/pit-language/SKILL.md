@@ -32,6 +32,11 @@ Key-value metadata: `[name=value]`. Stack multiple: `[version=1][author=alice]`.
 | `R<id>n` | Resource — owned, nullable |
 | `R<id>&` | Resource — borrowed, non-nullable |
 | `R<id>n&` | Resource — borrowed, nullable |
+| `Rthis` | Self-referential resource — owned, non-nullable |
+| `Rthisn` | Self-referential resource — owned, nullable |
+| `Rthis&` | Self-referential resource — borrowed, non-nullable |
+
+`Rthis` is the critical tool for recursive or tree-shaped types. It references the current interface without needing to know its own RID — which would be impossible to compute ahead of time. Use it whenever an interface returns or accepts instances of itself (e.g., a directory entry that can navigate to child directory entries of the same type).
 
 Argument attributes prefix the type: `[name=offset]I32`, `[doc=handle]Rthis&`
 
@@ -68,6 +73,22 @@ Every interface's RID = `SHA3-256(canonical_display_string)` — deterministic, 
 In Rust: `interface.rid() -> [u8; 32]`, `interface.rid_str() -> String` (64-char hex).
 
 The RID is also why all generated type names across all backends embed the hex ID (e.g., `P<64-hex-chars>`) — stable, globally unique, no registry needed.
+
+---
+
+## Path-Free Capability Design
+
+When modelling filesystem or hierarchical access as PIT interfaces, avoid passing path strings as arguments. Path strings allow capability amplification — a holder of a file capability shouldn't be able to escape to arbitrary paths.
+
+The preferred pattern:
+- **Root capability** — a `file-env`-style interface with a `root()` method that returns the root node
+- **Navigation by object** — the node type has `get(name: R<buffer>&) -> Rthisn` for single-level access
+- **Multi-level navigation** — `navigate(segments: R<string-list>&) -> Rthisn` takes a list of name segments, not a slash-delimited path string
+- **Indexed iteration** — `child_count() -> I32` + `child_at(I32) -> Rthisn` replaces a walker interface
+- **Unified node type** — use a single interface for both files and directories; `is_dir()` distinguishes them; `read()`/`write()` operate on file nodes, `get()`/`child_at()` on directory nodes
+- **`Rthis` for recursion** — using `Rthis` for all sub-node references means the interface never needs to reference its own RID, which avoids the circular dependency problem
+
+The `pit/experimental/os/dir-entry.pit` interface is the reference implementation of this pattern.
 
 ---
 
@@ -131,7 +152,8 @@ Merge semantics: same-name attributes are overwritten (last wins); all attribute
 - **`[experimental=true]` changes the RID** — experimental and stable forms of the "same" interface are different interfaces with different RIDs; this is intentional
 - **Forgetting to recompute `pit-rid` after editing an experimental file** — any dependent interfaces that embed the old RID will silently reference a non-existent definition
 - **`take: false` in `ArgTy::Resource` means borrowed** — the name is counterintuitive (`take=true` = owned/taken)
-- **`this` as a resource ID is only valid when an interface references itself** — using it elsewhere is an error
+- **`Rthis` is the solution to circular RID dependencies** — if interface A needs to reference itself (e.g., a tree node returning child nodes of the same type), use `Rthis` not a hex RID. Hex RIDs require knowing the RID before writing the file, which is impossible for self-references.
+- **`Rthis` outside self-reference is an error** — `this` as a resource type is only valid when the interface genuinely references instances of itself
 - **The `unstable-*` features require opt-in** — gated with `#[instability::unstable]`, they'll warn on stable use
 - **Haxe maps both `I32` and `I64` to `haxe.Int32`** — known backend limitation, not a user error (see pit-integrations agent)
 

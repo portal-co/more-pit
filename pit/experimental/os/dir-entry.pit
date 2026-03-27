@@ -1,4 +1,13 @@
 [experimental=true]{
+    child_at(I32) -> (Rthisn);
+    child_count() -> (I32);
+    create_dir(R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5&) -> (Rthisn);
+    create_file(R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5&) -> (Rthisn);
+    get(R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5&) -> (Rthisn);
     is_dir() -> (I32);
-    path() -> (R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5)
+    name() -> (R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5);
+    navigate(Rccd39e387d198ec0c150c4597f3af76b3c6f78bb0b8bfbd89971434e57ab851c&) -> (Rthisn);
+    read() -> (R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5n);
+    remove(R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5&) -> ();
+    write(R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5&) -> ()
 }

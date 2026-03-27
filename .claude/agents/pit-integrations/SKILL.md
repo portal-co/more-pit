@@ -54,14 +54,24 @@ The five capability groups in `pit/experimental/os/`:
 | AI content scan | `ai-env.pit` | `AiEnv` |
 
 These capability interfaces depend on data-type interfaces that model return shapes:
-`string-list.pit` (for `Vec<String>`), `dir-entry.pit` + `dir-walker.pit` (for directory walks), `github-file.pit` + `github-file-list.pit` (for GitHub file listings).
+`string-list.pit` (for `Vec<String>` and path segment lists), `dir-entry.pit` (unified filesystem node), `github-file.pit` + `github-file-list.pit` (for GitHub file listings).
 
 **Type-system conventions for capability interfaces:**
 - Strings and bytes: `R<buffer-rid>&` borrowed for inputs, `R<buffer-rid>` owned for outputs
 - `Option<String>`: `R<buffer-rid>n` (nullable owned buffer)
 - `bool`: `I32` — 0/false, nonzero/true
 - `Vec<String>` or `Vec<T>`: a list interface with `len() -> I32` and `get(I32) -> R<item>`
-- Stateful iterator (unknown size): a walker interface with `next() -> R<item>n` — null signals end
+- Self-referential types: use `Rthis` — the `this` keyword references the current interface's own RID
+
+**Path-free filesystem design:** `file-env` does not accept path strings. Instead:
+- `file-env.root()` returns a `dir-entry` representing the root directory
+- Navigate by object: `dir.get(name)` → child `dir-entry` (nullable)
+- Iterate: `dir.child_count()` + `dir.child_at(i)` — no walker interface needed
+- Multi-level: `dir.navigate(R<string-list>&)` — a list of name segments, not a path string
+- Content: `entry.read()` / `entry.write(buf)` directly on the node
+- `dir-entry` is unified — one interface for both files and directories; `is_dir()` distinguishes them; `Rthis` is used for all sub-entry references, avoiding any circular RID dependency
+
+This prevents capability amplification: a holder of a `dir-entry` can only access that subtree, not escape to an arbitrary path.
 
 ---
 
