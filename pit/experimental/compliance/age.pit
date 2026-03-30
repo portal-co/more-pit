@@ -1,0 +1,4 @@
+[experimental=true]{
+    [deprecated=since inception; excempt from the Child Safety Policy as it may be used to perform mass survelliance]getAge() -> (I64);
+    getAgeProof(I32,I64,I64) -> (R867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5n);
+}
