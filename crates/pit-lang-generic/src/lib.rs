@@ -1,7 +1,7 @@
 //! # pit-lang-generic
 //!
 //! Unified code-generator backend for PIT (Portal Interface Types) interfaces targeting
-//! **C**, **Go**, **Haxe**, **TypeScript**, and **Swift**.
+//! **C**, **Go**, **Haxe**, **TypeScript**, **Swift**, and **Haskell**.
 //!
 //! All backends are unified under a single [`Opts<S>`] type parameterised by a [`Syntax`]
 //! implementation.  The [`C`] syntax re-uses the [`c`] sub-module's `Display`-based
@@ -10,7 +10,7 @@
 //! ## Quick start
 //!
 //! ```ignore
-//! use pit_lang_generic::{Opts, C, Go, Haxe, TypeScript, TypeScriptAsync, Swift};
+//! use pit_lang_generic::{Opts, C, Go, Haxe, TypeScript, TypeScriptAsync, Swift, Haskell};
 //! use pit_core::Interface;
 //!
 //! let iface: Interface = /* … */;
@@ -33,6 +33,9 @@
 //!
 //! // Swift
 //! let code = Opts::<Swift>::default().interface(&iface);
+//!
+//! // Haskell (monad-generic)
+//! let code = Opts::<Haskell>::default().interface(&iface);
 //! ```
 //!
 //! Package rewrites (Go / Haxe) are set on [`Opts::rewrites`].
@@ -577,3 +580,127 @@ pub type TsOpts     = Opts<TypeScript>;
 pub type TsOptsAsync = Opts<TypeScriptAsync>;
 /// Type alias for Swift code generation options.
 pub type SwiftOpts  = Opts<Swift>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Haskell (monad-generic) syntax
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// [`Syntax`] implementation for Haskell (monad-generic).
+///
+/// Each PIT interface becomes a Haskell typeclass parameterised over a type
+/// variable `self` (the resource/implementor) and a monad `m`.  Every method
+/// takes `self` as its first argument and wraps the return type in `m (...)`.
+///
+/// ## Type mapping
+///
+/// | PIT type | Haskell type |
+/// |---|---|
+/// | `i32` | `Data.Word.Word32` |
+/// | `i64` | `Data.Word.Word64` |
+/// | `f32` | `Float` |
+/// | `f64` | `Double` |
+/// | `resource(this)` | `self` |
+/// | `resource(of id)` | `P<hex_id>` |
+/// | `resource(none)` | `()` |
+/// | nullable wrapper | `Maybe <inner>` |
+///
+/// ## Generated code example
+///
+/// ```haskell
+/// class Monad m => P<hex_id> self m where
+///   p<hex_id>_read  :: self -> Data.Word.Word32 -> m (Data.Word.Word64)
+///   p<hex_id>_write :: self -> Data.Word.Word64 -> m ()
+/// ```
+///
+/// Rewrites (package paths) are ignored; use the hex-based names directly,
+/// or import the generated module under a qualified alias in your own code.
+#[derive(Default, Clone, Debug)]
+pub struct Haskell;
+
+impl Haskell {
+    /// Map a single PIT [`Arg`] to a Haskell type string.
+    ///
+    /// `ResTy::This` is rendered as the `self` type-variable that appears in
+    /// the surrounding typeclass declaration.
+    fn ty_str(arg: &Arg) -> String {
+        match arg {
+            Arg::I32 => "Data.Word.Word32".into(),
+            Arg::I64 => "Data.Word.Word64".into(),
+            Arg::F32 => "Float".into(),
+            Arg::F64 => "Double".into(),
+            Arg::Resource { ty, nullable, .. } => {
+                let base: String = match ty {
+                    ResTy::None    => "()".into(),
+                    ResTy::Of(id)  => format!("P{}", hex::encode(id)),
+                    ResTy::This    => "self".into(),
+                    _              => todo!(),
+                };
+                if *nullable {
+                    format!("(Maybe {})", base)
+                } else {
+                    base
+                }
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+impl Syntax for Haskell {
+    fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, _this: [u8; 32]) -> impl Display + 'a {
+        Self::ty_str(arg)
+    }
+
+    /// Renders a complete Haskell method type (the part after `::`).
+    ///
+    /// Shape: `self -> p0_ty -> p1_ty -> m (r0_ty, r1_ty)`
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
+        let params: Vec<String> = sig
+            .params
+            .iter()
+            .map(|a| opts.ty(a, this).to_string())
+            .collect();
+        let rets: Vec<String> = sig
+            .rets
+            .iter()
+            .map(|a| opts.ty(a, this).to_string())
+            .collect();
+
+        // Wrap all return types in the monad `m`, using tuple syntax.
+        // Zero rets  → m ()     Single ret → m (T)     Many → m (T1, T2, ...)
+        let monadic_ret = format!("m ({})", rets.join(", "));
+
+        // Build the full arrow chain: self -> p0 -> p1 -> m (...)
+        let mut arrows: Vec<String> = Vec::new();
+        arrows.push("self".into());
+        arrows.extend(params);
+        arrows.push(monadic_ret);
+
+        format!(":: {}", arrows.join(" -> "))
+    }
+
+    /// Renders a complete Haskell typeclass declaration for the interface.
+    ///
+    /// ```haskell
+    /// class Monad m => P<hex> self m where
+    ///   p<hex>_method :: self -> … -> m (…)
+    /// ```
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
+        let this = iface.rid();
+        let hex = hex::encode(this);
+        let methods: Vec<String> = iface
+            .methods
+            .iter()
+            .map(|(name, sig)| {
+                format!("  p{hex}_{name} {}", opts.meth(sig, this))
+            })
+            .collect();
+        format!(
+            "class Monad m => P{hex} self m where\n{}",
+            methods.join("\n")
+        )
+    }
+}
+
+/// Type alias for Haskell (monad-generic) code generation options.
+pub type HaskellOpts = Opts<Haskell>;

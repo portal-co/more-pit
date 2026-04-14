@@ -1,0 +1,15 @@
+[package]
+name = "pit-haskell-generic"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "Haskell (monad-generic) PIT code-generator — thin re-export of pit-lang-generic"
+
+[dependencies]
+pit-lang-generic = { path = "../pit-lang-generic" }
+
+[features]
+unstable-sdk      = ["pit-lang-generic/unstable-sdk"]
+unstable-pcode    = ["pit-lang-generic/unstable-pcode"]
+unstable-sdkcode  = ["pit-lang-generic/unstable-sdkcode"]
+unstable-generics = ["pit-lang-generic/unstable-generics"]

@@ -4,6 +4,7 @@ members = [
     "crates/pit-c-generic",
     "crates/pit-go-generic",
     "crates/pit-haxe-generic",
+    "crates/pit-haskell-generic",
     "crates/pit-rust-generic",
     "crates/pit-swift-generic",
     "crates/pit-to-capnp",
@@ -16,6 +17,7 @@ resolver = "3"
 [workspace.dependencies]
 pit-core = { version = "^0.4.8", git = "https://github.com/portal-co/pit-core.git" }
 pit-lang-generic = { path = "crates/pit-lang-generic" }
+pit-haskell-generic = { path = "crates/pit-haskell-generic" }
 instability = "0.3.7"
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
