@@ -1,0 +1,6 @@
+package pit;
+
+
+interface P7a2ffa63ae1d6a74378940fbb3da332cc75e50c7fab9586675c3f752a8ffaceb {
+  public function p7a2ffa63ae1d6a74378940fbb3da332cc75e50c7fab9586675c3f752a8ffaceb_scan(p0: P867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5, p1: P867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5): {r0: haxe.Int32, r1: Float};
+}

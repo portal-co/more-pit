@@ -1,0 +1,6 @@
+
+export type P68da167712ddf1601aed7908c99972e62a41bdea1e28b241306a6b58d29e532d = {
+  P68da167712ddf1601aed7908c99972e62a41bdea1e28b241306a6b58d29e532d_read8(p0: bigint): [number];
+  P68da167712ddf1601aed7908c99972e62a41bdea1e28b241306a6b58d29e532d_size(): [bigint];
+  P68da167712ddf1601aed7908c99972e62a41bdea1e28b241306a6b58d29e532d_write8(p0: bigint, p1: number): void
+}

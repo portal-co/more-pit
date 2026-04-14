@@ -5,6 +5,7 @@ members = [
     "crates/pit-go-generic",
     "crates/pit-haxe-generic",
     "crates/pit-haskell-generic",
+    "crates/pit-gen",
     "crates/pit-rust-generic",
     "crates/pit-swift-generic",
     "crates/pit-to-capnp",

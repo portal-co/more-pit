@@ -255,7 +255,7 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
         }
     };
     quote! {
-        #[derive(#core::Clone,#core::Copy,#core::Debug)]
+        #[derive(Clone, Copy, Debug)]
         struct #xe{}
         const _: () = {
             impl #core::fmt::Display for #xe{
@@ -267,7 +267,7 @@ pub fn interface(p: &Params, i: &Interface) -> TokenStream {
         };
         pub trait #x<'bound>: 'bound{
             type Error: #core::error::Error;
-            #(#methods);*
+            #(#methods;)*
         }
         #spec
     }

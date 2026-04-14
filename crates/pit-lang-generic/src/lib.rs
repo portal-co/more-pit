@@ -1,11 +1,13 @@
 //! # pit-lang-generic
 //!
 //! Unified code-generator backend for PIT (Portal Interface Types) interfaces targeting
-//! **C**, **Go**, **Haxe**, **TypeScript**, **Swift**, and **Haskell**.
+//! **C**, **Go**, **Haxe**, **TypeScript**, **Swift**, **Haskell**, and **Rust**
+//! (Rust via [`pit-rust-generic`]).
 //!
-//! All backends are unified under a single [`Opts<S>`] type parameterised by a [`Syntax`]
-//! implementation.  The [`C`] syntax re-uses the [`c`] sub-module's `Display`-based
-//! rendering pipeline so no intermediate [`String`] allocations occur during C output.
+//! All non-Rust backends are unified under a single [`Opts<S>`] type parameterised
+//! by a [`Syntax`] implementation.  The [`C`] syntax re-uses the [`c`] sub-module's
+//! `Display`-based rendering pipeline so no intermediate [`String`] allocations occur
+//! during C output.
 //!
 //! ## Quick start
 //!
@@ -15,9 +17,8 @@
 //!
 //! let iface: Interface = /* … */;
 //!
-//! // C (Display-based, no intermediate String allocations)
+//! // C — interface99 header macros
 //! let code = Opts::<C>::default().interface(&iface);
-//! println!("{code}");
 //!
 //! // Go
 //! let code = Opts::<Go>::default().interface(&iface);
@@ -34,12 +35,39 @@
 //! // Swift
 //! let code = Opts::<Swift>::default().interface(&iface);
 //!
-//! // Haskell (monad-generic)
+//! // Haskell (monad-generic with associated resource type)
 //! let code = Opts::<Haskell>::default().interface(&iface);
+//!
+//! // Complete source file (includes module header + imports):
+//! let file: String = Opts::<Haskell>::default().file(&iface);
 //! ```
 //!
-//! Package rewrites (Go / Haxe) are set on [`Opts::rewrites`].
-//! The C prefix is set on [`C::prefix`].
+//! ## Module-per-file generation
+//!
+//! [`Syntax::render_file`] / [`Opts::file`] produce a complete source file
+//! including any language-specific preamble and import statements for
+//! dependencies.  Populate [`Opts::rewrites`] with the direct-dependency map
+//! before calling `file()`:
+//!
+//! ```ignore
+//! let mut opts = Opts::<Haskell>::default();
+//! // dep_rid → module name (e.g. "P<dep_hex>")
+//! opts.rewrites.insert(dep_rid, "P<dep_hex>".into());
+//! let src: String = opts.file(&iface);
+//! ```
+//!
+//! The `pit-gen` CLI constructs this map automatically from the full `.pit` file graph.
+//!
+//! ## Cross-language notes
+//!
+//! | Language | borrow flags | nullable | module system |
+//! |---|---|---|---|
+//! | C | ignored | `T *` pointer | `#include` per dep |
+//! | Go | ignored | Go interfaces are already nilable | single package |
+//! | Haxe | ignored | `Null<T>` | `package pit;` |
+//! | TypeScript | ignored | `T \| undefined` | `import type` per dep |
+//! | Swift | ignored | `T?` | all files compiled together |
+//! | Haskell | ignored | `Maybe T` | `import qualified` per dep |
 //!
 //! ## Feature flags
 //!
@@ -53,7 +81,12 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{collections::btree_map::BTreeMap, format, string::{String, ToString}, vec::Vec};
+use alloc::{
+    collections::btree_map::BTreeMap,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::fmt::Display;
 use pit_core::{Arg, Interface, ResTy, Sig};
 
@@ -70,25 +103,30 @@ pub mod c;
 /// Defines the language-specific rendering rules used by [`Opts`].
 ///
 /// Implement this trait to add support for a new target language.
-/// Three methods map the three levels of a PIT interface hierarchy:
-/// argument type → method signature → full interface declaration.
+/// Four methods cover the full generation surface:
 ///
-/// Return types are `impl Display` rather than `String` so that implementations
-/// can avoid intermediate heap allocations (as [`C`] does via the [`c`] module's
-/// wrapper types).  Implementations that build strings internally simply return
-/// the `String` directly since `String: Display`.
+/// ```text
+/// render_ty        – single argument type
+/// render_meth      – method signature (params + return)
+/// render_interface – complete type/interface/protocol/class declaration
+/// render_file      – complete source file (preamble + imports + declaration)
+/// ```
+///
+/// The three `render_*` methods return `impl Display` to avoid mandatory heap
+/// allocation; implementations that build strings simply return `String` since
+/// `String: Display`.
+///
+/// `render_file` returns `String` and has a sensible default that delegates to
+/// `render_interface`, so existing implementations remain valid.
 pub trait Syntax: Default + Clone + core::fmt::Debug {
     /// Render a single argument type as a [`Display`] value.
     ///
-    /// * `opts`    – the enclosing [`Opts`], giving access to `rewrites`
-    /// * `arg`     – the PIT argument to render
-    /// * `this`    – resource ID of the enclosing interface (needed for `ResTy::This`)
+    /// * `opts` – the enclosing [`Opts`], providing `rewrites` and `syntax`
+    /// * `arg`  – the PIT argument to render
+    /// * `this` – resource ID of the enclosing interface (for `ResTy::This`)
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a;
 
     /// Render a complete method signature as a [`Display`] value.
-    ///
-    /// The default implementation calls [`Self::render_ty`] for every parameter
-    /// and return type; override only when the overall signature shape differs.
     ///
     /// * `opts` – the enclosing [`Opts`]
     /// * `sig`  – the PIT method signature
@@ -100,6 +138,19 @@ pub trait Syntax: Default + Clone + core::fmt::Debug {
     /// * `opts`  – the enclosing [`Opts`]
     /// * `iface` – the PIT interface
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a;
+
+    /// Render a complete source file for a single PIT interface.
+    ///
+    /// Includes any language-specific file header (package/module declaration,
+    /// language-pragma lines) and import/include statements derived from
+    /// [`Opts::rewrites`].  The CLI populates `rewrites` with the direct
+    /// dependencies of the interface before calling this method.
+    ///
+    /// Returns a heap-allocated [`String`].  The default implementation simply
+    /// delegates to [`Self::render_interface`] with no file-level wrapper.
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        Self::render_interface(opts, iface).to_string()
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,33 +160,29 @@ pub trait Syntax: Default + Clone + core::fmt::Debug {
 /// Configuration for generating code in language `S`.
 ///
 /// `S` implements [`Syntax`] and encodes all language-specific rendering rules.
-/// `rewrites` applies to languages whose resource-type references span packages
-/// (Go and Haxe); it is ignored by C / Swift / TypeScript which have no package system.
 ///
-/// # Constructing
+/// `rewrites` maps 32-byte resource IDs to backend-specific import/include
+/// strings for the *direct dependencies* of one interface.  The `pit-gen` CLI
+/// populates this map before calling [`Opts::file`].  Semantics per backend:
 ///
-/// ```ignore
-/// // Zero rewrites — just use Default
-/// let opts = Opts::<Go>::default();
-///
-/// // With rewrites
-/// let mut opts = Opts::<Go>::default();
-/// opts.rewrites.insert(some_rid, "mypkg".into());
-///
-/// // C with a custom prefix
-/// let mut opts = Opts::<C>::default();
-/// opts.syntax.prefix = "my_".into();
-/// ```
+/// | Backend | Value stored in `rewrites` |
+/// |---|---|
+/// | C | `"P<hex>.h"` (include path) |
+/// | Go | `"<module>/p<hex>"` (Go import path; empty = same package) |
+/// | Haxe | `"pit.P<hex>"` (FQN; empty = same package) |
+/// | TypeScript | `"./P<hex>"` (relative import path, no extension) |
+/// | TypeScriptAsync | `"./AP<hex>"` |
+/// | Swift | _(unused; all files compiled together)_ |
+/// | Haskell | `"P<hex>"` (module name) |
 #[derive(Default, Clone, Debug)]
 #[non_exhaustive]
 pub struct Opts<S: Syntax> {
-    /// Maps 32-byte resource IDs to target-language package/module import paths.
-    ///
-    /// Used by [`Go`] and [`Haxe`].  Other backends ignore this field.
+    /// Direct-dependency import map.  See the table on [`Opts`] for per-backend
+    /// semantics.
     pub rewrites: BTreeMap<[u8; 32], String>,
 
-    /// The [`Syntax`] instance.  Zero-sized for most backends; holds [`C::prefix`]
-    /// for the C backend.
+    /// The [`Syntax`] instance.  Zero-sized for most backends; holds
+    /// [`C::prefix`] for the C backend.
     pub syntax: S,
 }
 
@@ -144,8 +191,6 @@ impl<S: Syntax> Opts<S> {
     ///
     /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
     /// [`String`] is strictly required.
-    ///
-    /// Delegates to [`Syntax::render_ty`].
     #[inline]
     pub fn ty<'a>(&'a self, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         S::render_ty(self, arg, this)
@@ -155,8 +200,6 @@ impl<S: Syntax> Opts<S> {
     ///
     /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
     /// [`String`] is strictly required.
-    ///
-    /// Delegates to [`Syntax::render_meth`].
     #[inline]
     pub fn meth<'a>(&'a self, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         S::render_meth(self, sig, this)
@@ -166,33 +209,21 @@ impl<S: Syntax> Opts<S> {
     ///
     /// Returns `impl Display`; call `.to_string()` only when a heap-allocated
     /// [`String`] is strictly required.
-    ///
-    /// Delegates to [`Syntax::render_interface`].
     #[inline]
     pub fn interface<'a>(&'a self, iface: &'a Interface) -> impl Display + 'a {
         S::render_interface(self, iface)
     }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: rewrite a resource-ID to the correct package-qualified name
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Build a package-qualified name for a resource `id` using `opts.rewrites`.
-///
-/// Returns `"<pkg>.<name>"` when a rewrite exists, otherwise
-/// `"<default_pkg_prefix><hex_id>.<name>"`.
-fn rewrite_pkg<S: Syntax>(
-    opts: &Opts<S>,
-    id: &[u8; 32],
-    default_pkg_prefix: &str,
-    name: &str,
-) -> String {
-    let pkg = match opts.rewrites.get(id) {
-        Some(p) => p.clone(),
-        None => format!("{}{}", default_pkg_prefix, hex::encode(id)),
-    };
-    format!("{}.{}", pkg, name)
+    /// Render a complete source file for a PIT interface.
+    ///
+    /// Populates `opts.rewrites` with the direct dependencies before calling
+    /// this method (see [`Opts`] docs and [`Syntax::render_file`]).
+    ///
+    /// Returns an owned [`String`].
+    #[inline]
+    pub fn file(&self, iface: &Interface) -> String {
+        S::render_file(self, iface)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,25 +232,34 @@ fn rewrite_pkg<S: Syntax>(
 
 /// [`Syntax`] implementation for C.
 ///
-/// Delegates to the [`c`] module's `Display`-based pipeline, so no intermediate
-/// [`String`] allocations occur for type / method / interface rendering.
+/// Generates [interface99](https://github.com/hirrolot/interface99)-compatible
+/// header macros.  No intermediate [`String`] allocations occur — the entire
+/// rendering pipeline is `Display`-based via the [`c`] module.
 ///
-/// Generated code uses C preprocessor macros:
+/// ## Generated code shape
+///
 /// ```c
-/// #define <prefix><hex_id>_t_IFACE_method(CUR,METH)  vfunc(struct{…},METH,VSelf,…)
-/// #define <prefix><hex_id>_t_IFACE  …
-/// interface(<prefix><hex_id>_t)
+/// #pragma once
+/// #include <stdint.h>
+/// #include <interface99.h>
+/// // (one #include per dependency)
+///
+/// #define pfx_<hex>_t_IFACE_method(CUR,METH) \
+///     vfunc(uint32_t, METH, VSelf, uint64_t p0)
+/// #define pfx_<hex>_t_IFACE \
+///     pfx_<hex>_t_IFACE_method(pfx_<hex>_t, method)
+/// interface(pfx_<hex>_t)
 /// ```
 ///
 /// Set [`C::prefix`] (via [`Opts::syntax`]) to customise the type-name prefix:
 /// ```ignore
 /// let mut opts = Opts::<C>::default();
 /// opts.syntax.prefix = "my_".into();
-/// println!("{}", opts.interface(&iface));
+/// println!("{}", opts.file(&iface));
 /// ```
 #[derive(Default, Clone, Debug)]
 pub struct C {
-    /// Prefix prepended to every generated C type name (maps to [`c::PureC::cx`]).
+    /// Prefix prepended to every generated C type name.
     pub prefix: String,
 }
 
@@ -227,28 +267,35 @@ impl Syntax for C {
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, _this: [u8; 32]) -> impl Display + 'a {
         c::C {
             value: arg,
-            kind: c::PureC {
-                cx: opts.syntax.prefix.as_str(),
-            },
+            kind: c::PureC { cx: opts.syntax.prefix.as_str() },
         }
     }
 
     fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, _this: [u8; 32]) -> impl Display + 'a {
         c::C {
             value: sig,
-            kind: c::PureC {
-                cx: opts.syntax.prefix.as_str(),
-            },
+            kind: c::PureC { cx: opts.syntax.prefix.as_str() },
         }
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         c::C {
             value: iface,
-            kind: c::PureC {
-                cx: opts.syntax.prefix.as_str(),
-            },
+            kind: c::PureC { cx: opts.syntax.prefix.as_str() },
         }
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        // opts.rewrites values are include-filenames, e.g. "P<dep_hex>.h"
+        let includes: String = opts
+            .rewrites
+            .values()
+            .map(|h| format!("#include \"{h}\"\n"))
+            .collect();
+        format!(
+            "#pragma once\n#include <stdint.h>\n#include <interface99.h>\n{includes}\n{}\n",
+            Self::render_interface(opts, iface)
+        )
     }
 }
 
@@ -258,23 +305,46 @@ impl Syntax for C {
 
 /// [`Syntax`] implementation for Go.
 ///
-/// Generated interfaces look like:
+/// All generated files share `package pitbindings`.  Within a single package
+/// all interface types are referenced without qualification, so `opts.rewrites`
+/// should be left empty for single-package generation (the default used by the
+/// CLI).  Cross-package rewrites are supported: set
+/// `opts.rewrites[dep_rid] = "mymod/p<hex>"` and the type will be referenced
+/// as `p<hex>.P<hex>`.
+///
+/// ## Generated code shape
+///
 /// ```go
-/// type P<hex_id> interface{P<hex_id>_method (p0 uint32) (uint64)}
+/// package pitbindings
+///
+/// type P<hex> interface {
+///     P<hex>_method(p0 uint32) uint64
+///     P<hex>_multi(p0 float32) (uint32, uint64)
+/// }
 /// ```
+///
+/// Borrow flags are ignored.  Go interface values are already implicitly
+/// nilable, so the `nullable` flag is not represented separately.
 #[derive(Default, Clone, Debug)]
 pub struct Go;
 
 impl Syntax for Go {
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
+        // Borrow flags (`take`) are ignored — Go has no ownership semantics.
+        // Nullable is also ignored — all Go interface types can hold nil.
         match arg {
-            Arg::I32 => format!("uint32"),
-            Arg::I64 => format!("uint64"),
-            Arg::F32 => format!("float32"),
-            Arg::F64 => format!("float64"),
+            Arg::I32 => "uint32".to_string(),
+            Arg::I64 => "uint64".to_string(),
+            Arg::F32 => "float32".to_string(),
+            Arg::F64 => "float64".to_string(),
             Arg::Resource { ty, .. } => match ty {
-                ResTy::None => format!("interface{{}}"),
-                ResTy::Of(id) => rewrite_pkg(opts, id, "pit", &format!("P{}", hex::encode(id))),
+                ResTy::None => "interface{}".to_string(),
+                ResTy::Of(id) => match opts.rewrites.get(id) {
+                    // Cross-package: "pkgname.TypeName"
+                    Some(pkg) => format!("{pkg}.P{}", hex::encode(id)),
+                    // Same package: bare type name
+                    None => format!("P{}", hex::encode(id)),
+                },
                 ResTy::This => format!("P{}", hex::encode(this)),
                 _ => todo!(),
             },
@@ -289,14 +359,21 @@ impl Syntax for Go {
             .enumerate()
             .map(|(i, a)| format!("p{i} {}", opts.ty(a, this)))
             .collect::<Vec<_>>()
-            .join(",");
-        let rets = sig
-            .rets
-            .iter()
-            .map(|a| opts.ty(a, this).to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("({params}) ({rets})")
+            .join(", ");
+        let ret = match sig.rets.len() {
+            0 => String::new(),
+            1 => format!(" {}", opts.ty(&sig.rets[0], this)),
+            _ => {
+                let rets = sig
+                    .rets
+                    .iter()
+                    .map(|a| opts.ty(a, this).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" ({rets})")
+            }
+        };
+        format!("({params}){ret}")
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
@@ -305,10 +382,29 @@ impl Syntax for Go {
         let methods = iface
             .methods
             .iter()
-            .map(|(name, sig)| format!("P{hex}_{name} {}", opts.meth(sig, this)))
+            .map(|(name, sig)| format!("\tP{hex}_{name}{}", opts.meth(sig, this)))
             .collect::<Vec<_>>()
-            .join("");
-        format!("type P{hex} interface{{{methods}}}")
+            .join("\n");
+        format!("type P{hex} interface {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        let _hex = hex::encode(iface.rid());
+        // rewrites values are Go import paths (empty = same-package, no import needed)
+        let imports: String = opts
+            .rewrites
+            .values()
+            .map(|pkg| format!("\t\"{pkg}\"\n"))
+            .collect();
+        let import_block = if imports.is_empty() {
+            String::new()
+        } else {
+            format!("import (\n{imports})\n\n")
+        };
+        format!(
+            "package pitbindings\n\n{import_block}{}\n",
+            Self::render_interface(opts, iface)
+        )
     }
 }
 
@@ -318,26 +414,45 @@ impl Syntax for Go {
 
 /// [`Syntax`] implementation for Haxe.
 ///
-/// Generated interfaces look like:
+/// All generated files live in `package pit`.  Within a single package types
+/// are visible without imports; `opts.rewrites` is only needed for
+/// cross-package references.
+///
+/// ## Generated code shape
+///
 /// ```haxe
-/// interface P<hex_id> {P<hex_id>_method (p0: haxe.Int32): {r0: Float}}
+/// package pit;
+///
+/// interface P<hex> {
+///   public function p<hex>_method(p0: haxe.Int32): haxe.Int64;
+///   public function p<hex>_nullable(p0: haxe.Int32): Null<P<dep_hex>>;
+/// }
 /// ```
+///
+/// Borrow flags are ignored.
 #[derive(Default, Clone, Debug)]
 pub struct Haxe;
 
 impl Syntax for Haxe {
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         match arg {
-            Arg::I32 => format!("haxe.Int32"),
-            Arg::I64 => format!("haxe.Int32"),
-            Arg::F32 => format!("Float"),
-            Arg::F64 => format!("Float"),
-            Arg::Resource { ty, .. } => match ty {
-                ResTy::None => format!("Dynamic"),
-                ResTy::Of(id) => rewrite_pkg(opts, id, "pit", &format!("P{}", hex::encode(id))),
-                ResTy::This => format!("P{}", hex::encode(this)),
-                _ => todo!(),
-            },
+            Arg::I32 => "haxe.Int32".to_string(),
+            Arg::I64 => "haxe.Int64".to_string(),
+            Arg::F32 => "Float".to_string(),
+            Arg::F64 => "Float".to_string(),
+            Arg::Resource { ty, nullable, .. } => {
+                // Borrow flags ignored.
+                let base = match ty {
+                    ResTy::None => "Dynamic".to_string(),
+                    ResTy::Of(id) => match opts.rewrites.get(id) {
+                        Some(fqn) => fqn.clone(),
+                        None => format!("P{}", hex::encode(id)),
+                    },
+                    ResTy::This => format!("P{}", hex::encode(this)),
+                    _ => todo!(),
+                };
+                if *nullable { format!("Null<{base}>") } else { base }
+            }
             _ => todo!(),
         }
     }
@@ -349,15 +464,22 @@ impl Syntax for Haxe {
             .enumerate()
             .map(|(i, a)| format!("p{i}: {}", opts.ty(a, this)))
             .collect::<Vec<_>>()
-            .join(",");
-        let rets = sig
-            .rets
-            .iter()
-            .enumerate()
-            .map(|(i, a)| format!("r{i}: {}", opts.ty(a, this)))
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("({params}): {{{rets}}}")
+            .join(", ");
+        let ret = match sig.rets.len() {
+            0 => "Void".to_string(),
+            1 => opts.ty(&sig.rets[0], this).to_string(),
+            _ => {
+                let fields = sig
+                    .rets
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| format!("r{i}: {}", opts.ty(a, this)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{{{fields}}}")
+            }
+        };
+        format!("({params}): {ret}")
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
@@ -366,10 +488,25 @@ impl Syntax for Haxe {
         let methods = iface
             .methods
             .iter()
-            .map(|(name, sig)| format!("P{hex}_{name} {}", opts.meth(sig, this)))
+            .map(|(name, sig)| {
+                format!("  public function p{hex}_{name}{};", opts.meth(sig, this))
+            })
             .collect::<Vec<_>>()
-            .join("");
-        format!("interface P{hex} {{{methods}}}")
+            .join("\n");
+        format!("interface P{hex} {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        // rewrites values are FQNs to import (e.g. "pit.P<dep_hex>")
+        let imports: String = opts
+            .rewrites
+            .values()
+            .map(|fqn| format!("import {fqn};\n"))
+            .collect();
+        format!(
+            "package pit;\n\n{imports}\n{}\n",
+            Self::render_interface(opts, iface)
+        )
     }
 }
 
@@ -379,34 +516,41 @@ impl Syntax for Haxe {
 
 /// [`Syntax`] implementation for TypeScript (synchronous).
 ///
-/// Generated types look like:
+/// ## Generated code shape
+///
 /// ```typescript
-/// export type P<hex_id> = {P<hex_id>_method (p0: number): [number]}
+/// import type { P<dep_hex> } from "./P<dep_hex>";
+///
+/// export type P<hex> = {
+///   P<hex>_method(p0: number): void;
+///   P<hex>_query(p0: number): [bigint];
+/// }
 /// ```
+///
+/// Borrow flags are ignored.
+/// Nullable resources render as `T | undefined`.
 #[derive(Default, Clone, Debug)]
 pub struct TypeScript;
 
 impl TypeScript {
-    fn ty_inner(_opts: &Opts<Self>, arg: &Arg, this: [u8; 32], prefix: &str) -> String {
+    /// Shared type-rendering helper used by both sync and async variants.
+    ///
+    /// `prefix` is prepended to resource type names (`""` for sync, `"A"` for async).
+    pub(crate) fn ty_inner(_opts: &Opts<Self>, arg: &Arg, this: [u8; 32], prefix: &str) -> String {
         match arg {
-            Arg::I32 => format!("number"),
-            Arg::I64 => format!("bigint"),
-            Arg::F32 => format!("number"),
-            Arg::F64 => format!("number"),
-            Arg::Resource {
-                ty, nullable, ..
-            } => {
+            Arg::I32 => "number".to_string(),
+            Arg::I64 => "bigint".to_string(),
+            Arg::F32 => "number".to_string(),
+            Arg::F64 => "number".to_string(),
+            Arg::Resource { ty, nullable, .. } => {
+                // Borrow flags ignored.
                 let base = match ty {
-                    ResTy::None => format!("any"),
+                    ResTy::None => "any".to_string(),
                     ResTy::Of(id) => format!("{prefix}P{}", hex::encode(id)),
                     ResTy::This => format!("{prefix}P{}", hex::encode(this)),
                     _ => todo!(),
                 };
-                if *nullable {
-                    format!("{base} | undefined")
-                } else {
-                    base
-                }
+                if *nullable { format!("{base} | undefined") } else { base }
             }
             _ => todo!(),
         }
@@ -425,14 +569,19 @@ impl Syntax for TypeScript {
             .enumerate()
             .map(|(i, a)| format!("p{i}: {}", opts.ty(a, this)))
             .collect::<Vec<_>>()
-            .join(",");
-        let rets = sig
-            .rets
-            .iter()
-            .map(|a| opts.ty(a, this).to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("({params}): [{rets}]")
+            .join(", ");
+        let ret = if sig.rets.is_empty() {
+            "void".to_string()
+        } else {
+            let rets = sig
+                .rets
+                .iter()
+                .map(|a| opts.ty(a, this).to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("[{rets}]")
+        };
+        format!("({params}): {ret}")
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
@@ -441,10 +590,23 @@ impl Syntax for TypeScript {
         let methods = iface
             .methods
             .iter()
-            .map(|(name, sig)| format!("P{hex}_{name} {}", opts.meth(sig, this)))
+            .map(|(name, sig)| format!("  P{hex}_{name}{}", opts.meth(sig, this)))
             .collect::<Vec<_>>()
-            .join("");
-        format!("export type P{hex} = {{{methods}}}")
+            .join(";\n");
+        format!("export type P{hex} = {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        // rewrites: dep_rid → relative import path (e.g. "./P<dep_hex>")
+        let imports: String = opts
+            .rewrites
+            .iter()
+            .map(|(rid, path)| {
+                let hex = hex::encode(rid);
+                format!("import type {{ P{hex} }} from \"{path}\";\n")
+            })
+            .collect();
+        format!("{imports}\n{}\n", Self::render_interface(opts, iface))
     }
 }
 
@@ -454,21 +616,26 @@ impl Syntax for TypeScript {
 
 /// [`Syntax`] implementation for TypeScript with async / Promise support.
 ///
-/// Type names are prefixed with `A` (e.g. `AP<hex_id>`).
-/// Return types include a `| Promise<[…]>` variant.
+/// Type names carry the `A` prefix (e.g. `AP<hex>`).
+/// Returns include a `| Promise<…>` union alternative.
 ///
-/// Generated types look like:
+/// ## Generated code shape
+///
 /// ```typescript
-/// export type AP<hex_id> = {AP<hex_id>_method (p0: number): [number]| Promise<[number]>}
+/// import type { AP<dep_hex> } from "./AP<dep_hex>";
+///
+/// export type AP<hex> = {
+///   AP<hex>_method(p0: number): void | Promise<void>;
+///   AP<hex>_query(p0: number): [bigint] | Promise<[bigint]>
+/// }
 /// ```
 #[derive(Default, Clone, Debug)]
 pub struct TypeScriptAsync;
 
 impl Syntax for TypeScriptAsync {
     fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
-        // Delegate to the shared helper with the async "A" prefix.
-        // We build a temporary sync Opts with no rewrites — rewrites are not used
-        // by TypeScript's ty_inner, so this is always correct.
+        // Build a temporary sync Opts so we can reuse ty_inner.
+        // TypeScript's ty_inner does not use opts.rewrites, so an empty Opts is fine.
         let tmp = Opts::<TypeScript>::default();
         TypeScript::ty_inner(&tmp, arg, this, "A")
     }
@@ -480,14 +647,19 @@ impl Syntax for TypeScriptAsync {
             .enumerate()
             .map(|(i, a)| format!("p{i}: {}", opts.ty(a, this)))
             .collect::<Vec<_>>()
-            .join(",");
-        let rets = sig
-            .rets
-            .iter()
-            .map(|a| opts.ty(a, this).to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("({params}): [{rets}]| Promise<[{rets}]>")
+            .join(", ");
+        let ret = if sig.rets.is_empty() {
+            "void | Promise<void>".to_string()
+        } else {
+            let rets = sig
+                .rets
+                .iter()
+                .map(|a| opts.ty(a, this).to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("[{rets}] | Promise<[{rets}]>")
+        };
+        format!("({params}): {ret}")
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
@@ -496,10 +668,23 @@ impl Syntax for TypeScriptAsync {
         let methods = iface
             .methods
             .iter()
-            .map(|(name, sig)| format!("AP{hex}_{name} {}", opts.meth(sig, this)))
+            .map(|(name, sig)| format!("  AP{hex}_{name}{}", opts.meth(sig, this)))
             .collect::<Vec<_>>()
-            .join("");
-        format!("export type AP{hex} = {{{methods}}}")
+            .join(";\n");
+        format!("export type AP{hex} = {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        // rewrites: dep_rid → relative import path using "AP" names
+        let imports: String = opts
+            .rewrites
+            .iter()
+            .map(|(rid, path)| {
+                let hex = hex::encode(rid);
+                format!("import type {{ AP{hex} }} from \"{path}\";\n")
+            })
+            .collect();
+        format!("{imports}\n{}\n", Self::render_interface(opts, iface))
     }
 }
 
@@ -509,26 +694,55 @@ impl Syntax for TypeScriptAsync {
 
 /// [`Syntax`] implementation for Swift.
 ///
-/// Generated protocols look like:
+/// Generates standard Swift protocols targeting Swift 5.7+.
+/// All generated `.swift` files are compiled together in one module, so
+/// no cross-file imports are needed.
+///
+/// ## Generated code shape
+///
 /// ```swift
-/// open protocol P<hex_id> {open P<hex_id>_method (p0 _: UInt32) -> (r0 _: UInt64)}
+/// public protocol P<hex> {
+///     func p<hex>_read(_ p0: UInt32) -> any P<dep_hex>
+///     func p<hex>_create() -> Self?
+///     func p<hex>_sizes() -> (UInt32, UInt64)
+///     func p<hex>_reset()
+/// }
 /// ```
+///
+/// Borrow flags are ignored.
+/// `ResTy::This` renders as `Self` (the protocol's implicit associated type).
+/// Nullable renders as `T?` (Swift optional).
+/// Multiple return values render as a Swift tuple `(T1, T2)`.
 #[derive(Default, Clone, Debug)]
 pub struct Swift;
 
 impl Syntax for Swift {
     fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
+        // Borrow flags ignored — Swift has ARC, not affine types.
+        let _ = this; // used only for ResTy::This below
         match arg {
-            Arg::I32 => format!("UInt32"),
-            Arg::I64 => format!("UInt64"),
-            Arg::F32 => format!("Float"),
-            Arg::F64 => format!("Double"),
-            Arg::Resource { ty, .. } => match ty {
-                ResTy::None => format!("Any"),
-                ResTy::Of(id) => format!("any P{}", hex::encode(id)),
-                ResTy::This => format!("any P{}", hex::encode(this)),
-                _ => todo!(),
-            },
+            Arg::I32 => "UInt32".to_string(),
+            Arg::I64 => "UInt64".to_string(),
+            Arg::F32 => "Float".to_string(),
+            Arg::F64 => "Double".to_string(),
+            Arg::Resource { ty, nullable, .. } => {
+                let base = match ty {
+                    ResTy::None => "Any".to_string(),
+                    ResTy::Of(id) => format!("any P{}", hex::encode(id)),
+                    // Self is the protocol's own conforming type
+                    ResTy::This => "Self".to_string(),
+                    _ => todo!(),
+                };
+                // Swift requires `(any Proto)?` not `any Proto?` for optional existentials
+                if *nullable {
+                    match &base {
+                        b if b.starts_with("any ") => format!("({b})?"),
+                        b => format!("{b}?"),
+                    }
+                } else {
+                    base
+                }
+            }
             _ => todo!(),
         }
     }
@@ -538,17 +752,23 @@ impl Syntax for Swift {
             .params
             .iter()
             .enumerate()
-            .map(|(i, a)| format!("p{i} _: {}", opts.ty(a, this)))
+            .map(|(i, a)| format!("_ p{i}: {}", opts.ty(a, this)))
             .collect::<Vec<_>>()
-            .join(",");
-        let rets = sig
-            .rets
-            .iter()
-            .enumerate()
-            .map(|(i, a)| format!("r{i} _: {}", opts.ty(a, this)))
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("({params}) -> ({rets})")
+            .join(", ");
+        let ret = match sig.rets.len() {
+            0 => String::new(),
+            1 => format!(" -> {}", opts.ty(&sig.rets[0], this)),
+            _ => {
+                let rets = sig
+                    .rets
+                    .iter()
+                    .map(|a| opts.ty(a, this).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" -> ({rets})")
+            }
+        };
+        format!("({params}){ret}")
     }
 
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
@@ -557,86 +777,102 @@ impl Syntax for Swift {
         let methods = iface
             .methods
             .iter()
-            .map(|(name, sig)| format!("open P{hex}_{name} {}", opts.meth(sig, this)))
+            .map(|(name, sig)| format!("    func p{hex}_{name}{}", opts.meth(sig, this)))
             .collect::<Vec<_>>()
-            .join("");
-        format!("open protocol P{hex} {{{methods}}}")
+            .join("\n");
+        format!("public protocol P{hex} {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        // All .swift files in a target are compiled together — no imports needed.
+        format!("{}\n", Self::render_interface(opts, iface))
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Convenience type aliases matching the old per-crate public API
+// Haskell (monad-generic, associated resource type) syntax
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Type alias for C code generation options.
-pub type COpts      = Opts<C>;
-/// Type alias for Go code generation options.
-pub type GoOpts     = Opts<Go>;
-/// Type alias for Haxe code generation options.
-pub type HaxeOpts   = Opts<Haxe>;
-/// Type alias for TypeScript (sync) code generation options.
-pub type TsOpts     = Opts<TypeScript>;
-/// Type alias for TypeScript (async) code generation options.
-pub type TsOptsAsync = Opts<TypeScriptAsync>;
-/// Type alias for Swift code generation options.
-pub type SwiftOpts  = Opts<Swift>;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Haskell (monad-generic) syntax
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// [`Syntax`] implementation for Haskell (monad-generic).
+/// [`Syntax`] implementation for Haskell — monad-generic with an associated
+/// resource type.
 ///
-/// Each PIT interface becomes a Haskell typeclass parameterised over a type
-/// variable `self` (the resource/implementor) and a monad `m`.  Every method
-/// takes `self` as its first argument and wraps the return type in `m (...)`.
+/// Each PIT interface becomes a Haskell typeclass parameterised over a monad
+/// `m`.  The "self" / resource type is an **associated type** `Self m`, not a
+/// separate class parameter.  This ensures there is at most one implementation
+/// of each interface per monad — a principled design for capability-based APIs.
+///
+/// Dependency interfaces appear as superclass constraints; their resource types
+/// are referenced as `P<dep_hex>.Self m`.
 ///
 /// ## Type mapping
 ///
 /// | PIT type | Haskell type |
 /// |---|---|
-/// | `i32` | `Data.Word.Word32` |
-/// | `i64` | `Data.Word.Word64` |
+/// | `i32` | `Word32` |
+/// | `i64` | `Word64` |
 /// | `f32` | `Float` |
 /// | `f64` | `Double` |
-/// | `resource(this)` | `self` |
-/// | `resource(of id)` | `P<hex_id>` |
+/// | `resource(this)` | `Self m` (own associated type) |
+/// | `resource(of id)` | `P<hex>.Self m` (dep associated type, qualified) |
 /// | `resource(none)` | `()` |
-/// | nullable wrapper | `Maybe <inner>` |
+/// | nullable | `Maybe (inner)` |
+/// | borrow flag | ignored |
 ///
-/// ## Generated code example
+/// ## Generated module shape
 ///
 /// ```haskell
-/// class Monad m => P<hex_id> self m where
-///   p<hex_id>_read  :: self -> Data.Word.Word32 -> m (Data.Word.Word64)
-///   p<hex_id>_write :: self -> Data.Word.Word64 -> m ()
+/// {-# LANGUAGE TypeFamilies #-}
+/// module P<hex> (P<hex>(..)) where
+///
+/// import Data.Kind (Type)
+/// import Data.Word (Word32, Word64)
+/// import qualified P<dep_hex> (P<dep_hex>(..))
+///
+/// class (Monad m, P<dep_hex>.P<dep_hex> m) => P<hex> m where
+///   type Self m :: Type
+///   p<hex>_read  :: Self m -> Word32 -> m (P<dep_hex>.Self m)
+///   p<hex>_write :: Self m -> P<dep_hex>.Self m -> m ()
 /// ```
 ///
-/// Rewrites (package paths) are ignored; use the hex-based names directly,
-/// or import the generated module under a qualified alias in your own code.
+/// `opts.rewrites[dep_rid]` = `"P<dep_hex>"` (the module name).
 #[derive(Default, Clone, Debug)]
 pub struct Haskell;
 
 impl Haskell {
-    /// Map a single PIT [`Arg`] to a Haskell type string.
+    /// Wrap a Haskell type string in parens when it contains spaces.
     ///
-    /// `ResTy::This` is rendered as the `self` type-variable that appears in
-    /// the surrounding typeclass declaration.
-    fn ty_str(arg: &Arg) -> String {
+    /// Required when the type appears as an argument to a type constructor
+    /// (e.g. `m (Self m)` rather than `m Self m`).
+    fn hs_arg(s: &str) -> String {
+        if s.contains(' ') { format!("({s})") } else { s.to_string() }
+    }
+
+    /// Render a PIT [`Arg`] to a Haskell type string.
+    ///
+    /// Uses `opts.rewrites` to resolve dep module names.
+    fn ty_str(opts: &Opts<Self>, arg: &Arg) -> String {
         match arg {
-            Arg::I32 => "Data.Word.Word32".into(),
-            Arg::I64 => "Data.Word.Word64".into(),
+            Arg::I32 => "Word32".into(),
+            Arg::I64 => "Word64".into(),
             Arg::F32 => "Float".into(),
             Arg::F64 => "Double".into(),
             Arg::Resource { ty, nullable, .. } => {
+                // Borrow flags (take/&) are ignored.
                 let base: String = match ty {
-                    ResTy::None    => "()".into(),
-                    ResTy::Of(id)  => format!("P{}", hex::encode(id)),
-                    ResTy::This    => "self".into(),
-                    _              => todo!(),
+                    ResTy::None => "()".into(),
+                    ResTy::Of(id) => {
+                        let modname = opts
+                            .rewrites
+                            .get(id)
+                            .cloned()
+                            .unwrap_or_else(|| format!("P{}", hex::encode(id)));
+                        format!("{modname}.Self m")
+                    }
+                    ResTy::This => "Self m".into(),
+                    _ => todo!(),
                 };
                 if *nullable {
-                    format!("(Maybe {})", base)
+                    format!("Maybe {}", Self::hs_arg(&base))
                 } else {
                     base
                 }
@@ -644,16 +880,32 @@ impl Haskell {
             _ => todo!(),
         }
     }
+
+    /// Collect the unique set of dependency RIDs referenced in `iface`
+    /// (i.e. all `ResTy::Of(id)` values that differ from `iface`'s own RID).
+    fn dep_rids(iface: &Interface) -> BTreeMap<[u8; 32], ()> {
+        let this = iface.rid();
+        let mut seen: BTreeMap<[u8; 32], ()> = BTreeMap::new();
+        for sig in iface.methods.values() {
+            for arg in sig.params.iter().chain(sig.rets.iter()) {
+                if let Arg::Resource { ty: ResTy::Of(id), .. } = arg {
+                    if *id != this {
+                        seen.insert(*id, ());
+                    }
+                }
+            }
+        }
+        seen
+    }
 }
 
 impl Syntax for Haskell {
-    fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, _this: [u8; 32]) -> impl Display + 'a {
-        Self::ty_str(arg)
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, _this: [u8; 32]) -> impl Display + 'a {
+        Self::ty_str(opts, arg)
     }
 
-    /// Renders a complete Haskell method type (the part after `::`).
-    ///
-    /// Shape: `self -> p0_ty -> p1_ty -> m (r0_ty, r1_ty)`
+    /// Renders the full type annotation for a method:
+    /// `:: Self m -> p0_ty -> … -> m ret_ty`
     fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
         let params: Vec<String> = sig
             .params
@@ -666,41 +918,105 @@ impl Syntax for Haskell {
             .map(|a| opts.ty(a, this).to_string())
             .collect();
 
-        // Wrap all return types in the monad `m`, using tuple syntax.
-        // Zero rets  → m ()     Single ret → m (T)     Many → m (T1, T2, ...)
-        let monadic_ret = format!("m ({})", rets.join(", "));
+        // Monadic return type — all results wrapped in m (...)
+        // 0 rets → m ()
+        // 1 ret  → m T  or  m (Complex T)  (parens when type has spaces)
+        // N rets → m (T1, T2, …)
+        let monadic_ret = match rets.len() {
+            0 => "m ()".to_string(),
+            1 => format!("m {}", Self::hs_arg(&rets[0])),
+            _ => format!("m ({})", rets.join(", ")),
+        };
 
-        // Build the full arrow chain: self -> p0 -> p1 -> m (...)
-        let mut arrows: Vec<String> = Vec::new();
-        arrows.push("self".into());
+        // Full arrow chain: Self m → p0 → … → m (…)
+        let mut arrows = Vec::new();
+        arrows.push("Self m".to_string());
         arrows.extend(params);
         arrows.push(monadic_ret);
-
         format!(":: {}", arrows.join(" -> "))
     }
 
-    /// Renders a complete Haskell typeclass declaration for the interface.
-    ///
-    /// ```haskell
-    /// class Monad m => P<hex> self m where
-    ///   p<hex>_method :: self -> … -> m (…)
-    /// ```
     fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
         let this = iface.rid();
         let hex = hex::encode(this);
+
+        // Collect dep module names for superclass constraints
+        let dep_rids = Self::dep_rids(iface);
+        let mut constraints = Vec::new();
+        constraints.push("Monad m".to_string());
+        for id in dep_rids.keys() {
+            let modname = opts
+                .rewrites
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| format!("P{}", hex::encode(id)));
+            // Qualified class name: ModuleName.ClassName m
+            constraints.push(format!("{modname}.{modname} m"));
+        }
+        let ctx = if constraints.len() == 1 {
+            constraints.remove(0)
+        } else {
+            format!("({})", constraints.join(", "))
+        };
+
         let methods: Vec<String> = iface
             .methods
             .iter()
-            .map(|(name, sig)| {
-                format!("  p{hex}_{name} {}", opts.meth(sig, this))
+            .map(|(name, sig)| format!("  p{hex}_{name} {}", opts.meth(sig, this)))
+            .collect();
+
+        format!(
+            "class {ctx} => P{hex} m where\n  type Self m :: Type\n{}",
+            methods.join("\n")
+        )
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        let hex = hex::encode(iface.rid());
+        let dep_rids = Self::dep_rids(iface);
+
+        // Import each dep module qualified, bringing the class and associated type into scope
+        let imports: String = dep_rids
+            .keys()
+            .map(|id| {
+                let modname = opts
+                    .rewrites
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("P{}", hex::encode(id)));
+                format!("import qualified {modname} ({modname}(..))\n")
             })
             .collect();
+
         format!(
-            "class Monad m => P{hex} self m where\n{}",
-            methods.join("\n")
+            "{{-# LANGUAGE TypeFamilies #-}}\n\
+             module P{hex} (P{hex}(..)) where\n\
+             \n\
+             import Data.Kind (Type)\n\
+             import Data.Word (Word32, Word64)\n\
+             {imports}\
+             \n\
+             {}\n",
+            Self::render_interface(opts, iface)
         )
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Convenience type aliases matching the old per-crate public API
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Type alias for C code generation options.
+pub type COpts = Opts<C>;
+/// Type alias for Go code generation options.
+pub type GoOpts = Opts<Go>;
+/// Type alias for Haxe code generation options.
+pub type HaxeOpts = Opts<Haxe>;
+/// Type alias for TypeScript (sync) code generation options.
+pub type TsOpts = Opts<TypeScript>;
+/// Type alias for TypeScript (async) code generation options.
+pub type TsOptsAsync = Opts<TypeScriptAsync>;
+/// Type alias for Swift code generation options.
+pub type SwiftOpts = Opts<Swift>;
 /// Type alias for Haskell (monad-generic) code generation options.
 pub type HaskellOpts = Opts<Haskell>;

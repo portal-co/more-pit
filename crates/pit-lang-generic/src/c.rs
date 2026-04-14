@@ -7,11 +7,25 @@
 //!
 //! ## Generated code pattern
 //!
+//! Compatible with [interface99](https://github.com/hirrolot/interface99).
+//!
 //! ```c
-//! #define <prefix><hex_id>_t_IFACE_<method>(CUR,METH)  vfunc(struct{…},METH,VSelf,…)
-//! #define <prefix><hex_id>_t_IFACE  <prefix><hex_id>_t_IFACE_m1(…) …
+//! #define <prefix><hex_id>_t_IFACE_<method>(CUR,METH) \
+//!     vfunc(RetType, METH, VSelf, T0 p0, T1 p1)
+//! #define <prefix><hex_id>_t_IFACE \
+//!     <prefix><hex_id>_t_IFACE_m1(<prefix><hex_id>_t, m1) \
+//!     <prefix><hex_id>_t_IFACE_m2(<prefix><hex_id>_t, m2)
 //! interface(<prefix><hex_id>_t)
 //! ```
+//!
+//! Return-type rules:
+//! - 0 returns → `void`
+//! - 1 return  → the C type directly
+//! - N returns → `struct { T r0; T r1; }` (anonymous struct)
+//!
+//! Borrow / ownership flags on resource arguments are ignored; borrowless
+//! languages use the resource type name directly.  Nullable resources are
+//! represented as pointers (`T *`).
 //!
 //! ## Example
 //!
@@ -108,30 +122,54 @@ macro_rules! c_disp {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Arg
+//
+// Borrow flags are ignored: all resource types appear by value/pointer.
+// Nullable resources are rendered as `T *` (pointer, implying nullability).
 c_disp!(<T: Display>[PureC<T>] pit_core::Arg => |this, f, kind| match this {
     pit_core::Arg::I32 => write!(f, "uint32_t"),
     pit_core::Arg::I64 => write!(f, "uint64_t"),
     pit_core::Arg::F32 => write!(f, "float"),
     pit_core::Arg::F64 => write!(f, "double"),
-    pit_core::Arg::Resource { ty, .. } => match ty {
-        pit_core::ResTy::None      => write!(f, "Any_T"),
-        pit_core::ResTy::Of(a)     => write!(f, "{}{}_t", &kind.cx, hex::encode(a)),
-        pit_core::ResTy::This      => write!(f, "CUR"),
-        _                          => todo!(),
-    },
+    pit_core::Arg::Resource { ty, nullable, .. } => {
+        // `take` (borrow vs owned) is deliberately ignored — abstract C
+        // interface definitions do not distinguish ownership.
+        let ptr = if *nullable { " *" } else { "" };
+        match ty {
+            pit_core::ResTy::None  => write!(f, "void{ptr}"),
+            pit_core::ResTy::Of(a) => write!(f, "{}{}_t{ptr}", &kind.cx, hex::encode(a)),
+            pit_core::ResTy::This  => write!(f, "CUR{ptr}"),
+            _                      => todo!(),
+        }
+    }
     _ => todo!(),
 });
 
 // Sig
 c_disp!(<T: Display>[PureC<T>] pit_core::Sig => |this, f, kind| {
-    write!(f, "vfunc(struct{{")?;
-    for (i, r) in this.rets.iter().enumerate() {
-        write!(f, "{} r{i}", C { value: r, kind: PureC { cx: &kind.cx } })?;
+    // ── vfunc( ────────────────────────────────────────────────────────────────────────
+    write!(f, "vfunc(")?;
+    // ── return type ──────────────────────────────────────────────────────────
+    match this.rets.as_slice() {
+        // 0 returns → void
+        [] => write!(f, "void")?,
+        // 1 return → the C type directly (no wrapping struct)
+        [r] => write!(f, "{}", C { value: r, kind: PureC { cx: &kind.cx } })?,
+        // N returns → anonymous struct with semicolon-separated fields
+        rs => {
+            write!(f, "struct{{")?;
+            for (i, r) in rs.iter().enumerate() {
+                write!(f, "{} r{i};", C { value: r, kind: PureC { cx: &kind.cx } })?;
+            }
+            write!(f, "}}")?;
+        }
     }
-    write!(f, "}},METH,VSelf,")?;
+    // ── method name placeholder + self ───────────────────────────────────────
+    write!(f, ",METH,VSelf")?;
+    // ── parameters (comma-prefixed so VSelf has no trailing comma) ───────────
     for (i, p) in this.params.iter().enumerate() {
-        write!(f, "{} p{i}", C { value: p, kind: PureC { cx: &kind.cx } })?;
+        write!(f, ",{} p{i}", C { value: p, kind: PureC { cx: &kind.cx } })?;
     }
+    write!(f, ")")?;
     Ok(())
 });
 
