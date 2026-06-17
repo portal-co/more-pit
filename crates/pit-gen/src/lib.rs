@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use pit_core::{Arg, Interface, ResTy};
+use pit_core::{Arg, ArgTy, Interface, ResTy};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backend
@@ -30,6 +30,8 @@ pub enum Backend {
     Swift,
     Haskell,
     Rust,
+    Java,
+    Scala,
 }
 
 impl Backend {
@@ -44,6 +46,8 @@ impl Backend {
             "swift" => Some(Self::Swift),
             "haskell" => Some(Self::Haskell),
             "rust" => Some(Self::Rust),
+            "java" => Some(Self::Java),
+            "scala" => Some(Self::Scala),
             _ => None,
         }
     }
@@ -59,6 +63,8 @@ impl Backend {
             Self::Swift => "swift",
             Self::Haskell => "haskell",
             Self::Rust => "rust",
+            Self::Java => "java",
+            Self::Scala => "scala",
         }
     }
 }
@@ -74,7 +80,7 @@ pub fn direct_deps(iface: &Interface) -> Vec<[u8; 32]> {
     let mut seen: BTreeMap<[u8; 32], ()> = BTreeMap::new();
     for sig in iface.methods.values() {
         for arg in sig.params.iter().chain(sig.rets.iter()) {
-            if let Arg::Resource { ty: ResTy::Of(id), .. } = arg {
+            if let ArgTy::Resource { ty: ResTy::Of(id), .. } = &arg.ty {
                 if *id != this {
                     seen.insert(*id, ());
                 }
@@ -99,6 +105,8 @@ pub fn output_filename(backend: Backend, hex: &str) -> String {
         Backend::Swift => format!("P{hex}.swift"),
         Backend::Haskell => format!("P{hex}.hs"),
         Backend::Rust => format!("p_{hex}.rs"),
+        Backend::Java => format!("P{hex}.java"),
+        Backend::Scala => format!("P{hex}.scala"),
     }
 }
 
@@ -117,5 +125,7 @@ pub fn rewrite_value(backend: Backend, dep_hex: &str) -> String {
         Backend::Swift => String::new(),   // all files compiled together
         Backend::Haskell => format!("P{dep_hex}"),
         Backend::Rust => String::new(),    // all traits in one file
+        Backend::Java => format!("pc.portal.pit.guest.P{dep_hex}"),
+        Backend::Scala => format!("pc.portal.pit.guest.scala.P{dep_hex}"),
     }
 }

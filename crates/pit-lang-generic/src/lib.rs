@@ -88,7 +88,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt::Display;
-use pit_core::{Arg, Interface, ResTy, Sig};
+use pit_core::{Arg, ArgTy, Interface, ResTy, Sig};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // C backend (Display-based; kept in its own module)
@@ -332,12 +332,12 @@ impl Syntax for Go {
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         // Borrow flags (`take`) are ignored — Go has no ownership semantics.
         // Nullable is also ignored — all Go interface types can hold nil.
-        match arg {
-            Arg::I32 => "uint32".to_string(),
-            Arg::I64 => "uint64".to_string(),
-            Arg::F32 => "float32".to_string(),
-            Arg::F64 => "float64".to_string(),
-            Arg::Resource { ty, .. } => match ty {
+        match &arg.ty {
+            ArgTy::I32 => "uint32".to_string(),
+            ArgTy::I64 => "uint64".to_string(),
+            ArgTy::F32 => "float32".to_string(),
+            ArgTy::F64 => "float64".to_string(),
+            ArgTy::Resource { ty, .. } => match ty {
                 ResTy::None => "interface{}".to_string(),
                 ResTy::Of(id) => match opts.rewrites.get(id) {
                     // Cross-package: "pkgname.TypeName"
@@ -435,12 +435,12 @@ pub struct Haxe;
 
 impl Syntax for Haxe {
     fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
-        match arg {
-            Arg::I32 => "haxe.Int32".to_string(),
-            Arg::I64 => "haxe.Int64".to_string(),
-            Arg::F32 => "Float".to_string(),
-            Arg::F64 => "Float".to_string(),
-            Arg::Resource { ty, nullable, .. } => {
+        match &arg.ty {
+            ArgTy::I32 => "haxe.Int32".to_string(),
+            ArgTy::I64 => "haxe.Int64".to_string(),
+            ArgTy::F32 => "Float".to_string(),
+            ArgTy::F64 => "Float".to_string(),
+            ArgTy::Resource { ty, nullable, .. } => {
                 // Borrow flags ignored.
                 let base = match ty {
                     ResTy::None => "Dynamic".to_string(),
@@ -537,12 +537,12 @@ impl TypeScript {
     ///
     /// `prefix` is prepended to resource type names (`""` for sync, `"A"` for async).
     pub(crate) fn ty_inner(_opts: &Opts<Self>, arg: &Arg, this: [u8; 32], prefix: &str) -> String {
-        match arg {
-            Arg::I32 => "number".to_string(),
-            Arg::I64 => "bigint".to_string(),
-            Arg::F32 => "number".to_string(),
-            Arg::F64 => "number".to_string(),
-            Arg::Resource { ty, nullable, .. } => {
+        match &arg.ty {
+            ArgTy::I32 => "number".to_string(),
+            ArgTy::I64 => "bigint".to_string(),
+            ArgTy::F32 => "number".to_string(),
+            ArgTy::F64 => "number".to_string(),
+            ArgTy::Resource { ty, nullable, .. } => {
                 // Borrow flags ignored.
                 let base = match ty {
                     ResTy::None => "any".to_string(),
@@ -720,12 +720,12 @@ impl Syntax for Swift {
     fn render_ty<'a>(_opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
         // Borrow flags ignored — Swift has ARC, not affine types.
         let _ = this; // used only for ResTy::This below
-        match arg {
-            Arg::I32 => "UInt32".to_string(),
-            Arg::I64 => "UInt64".to_string(),
-            Arg::F32 => "Float".to_string(),
-            Arg::F64 => "Double".to_string(),
-            Arg::Resource { ty, nullable, .. } => {
+        match &arg.ty {
+            ArgTy::I32 => "UInt32".to_string(),
+            ArgTy::I64 => "UInt64".to_string(),
+            ArgTy::F32 => "Float".to_string(),
+            ArgTy::F64 => "Double".to_string(),
+            ArgTy::Resource { ty, nullable, .. } => {
                 let base = match ty {
                     ResTy::None => "Any".to_string(),
                     ResTy::Of(id) => format!("any P{}", hex::encode(id)),
@@ -851,12 +851,12 @@ impl Haskell {
     ///
     /// Uses `opts.rewrites` to resolve dep module names.
     fn ty_str(opts: &Opts<Self>, arg: &Arg) -> String {
-        match arg {
-            Arg::I32 => "Word32".into(),
-            Arg::I64 => "Word64".into(),
-            Arg::F32 => "Float".into(),
-            Arg::F64 => "Double".into(),
-            Arg::Resource { ty, nullable, .. } => {
+        match &arg.ty {
+            ArgTy::I32 => "Word32".into(),
+            ArgTy::I64 => "Word64".into(),
+            ArgTy::F32 => "Float".into(),
+            ArgTy::F64 => "Double".into(),
+            ArgTy::Resource { ty, nullable, .. } => {
                 // Borrow flags (take/&) are ignored.
                 let base: String = match ty {
                     ResTy::None => "()".into(),
@@ -888,7 +888,7 @@ impl Haskell {
         let mut seen: BTreeMap<[u8; 32], ()> = BTreeMap::new();
         for sig in iface.methods.values() {
             for arg in sig.params.iter().chain(sig.rets.iter()) {
-                if let Arg::Resource { ty: ResTy::Of(id), .. } = arg {
+                if let ArgTy::Resource { ty: ResTy::Of(id), .. } = &arg.ty {
                     if *id != this {
                         seen.insert(*id, ());
                     }
@@ -997,6 +997,155 @@ impl Syntax for Haskell {
              {imports}\
              \n\
              {}\n",
+            Self::render_interface(opts, iface)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Java syntax
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Pure Java interface (`P<hex>`) for more-pit canonical definitions.
+#[derive(Default, Clone, Debug)]
+pub struct Java;
+
+impl Syntax for Java {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
+        match &arg.ty {
+            ArgTy::I32 => "int".to_string(),
+            ArgTy::I64 => "long".to_string(),
+            ArgTy::F32 => "float".to_string(),
+            ArgTy::F64 => "double".to_string(),
+            ArgTy::Resource { ty, nullable, .. } => {
+                let base = match ty {
+                    ResTy::None => "Object".to_string(),
+                    ResTy::Of(id) => format!("P{}", hex::encode(id)),
+                    ResTy::This => format!("P{}", hex::encode(this)),
+                    _ => todo!(),
+                };
+                if *nullable {
+                    format!("{base} | null")
+                } else {
+                    base
+                }
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
+        let params = sig
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, a)| format!("{} p{i}", opts.ty(a, this)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("({params})")
+    }
+
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
+        let hex = hex::encode(iface.rid());
+        let methods = iface
+            .methods
+            .iter()
+            .map(|(name, sig)| {
+                let ret = if sig.rets.is_empty() {
+                    "void".to_string()
+                } else if sig.rets.len() == 1 {
+                    opts.ty(&sig.rets[0], iface.rid()).to_string()
+                } else {
+                    "Object".to_string()
+                };
+                format!("  {ret} {name}{}", opts.meth(sig, iface.rid()))
+            })
+            .collect::<Vec<_>>()
+            .join(";\n");
+        format!("public interface P{hex} {{\n{methods};\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        let pkg = "pc.portal.pit.guest";
+        format!(
+            "package {pkg};\n\n{}\n",
+            Self::render_interface(opts, iface)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scala syntax
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Pure Scala trait (`P<hex>`) for more-pit canonical definitions.
+#[derive(Default, Clone, Debug)]
+pub struct Scala;
+
+impl Syntax for Scala {
+    fn render_ty<'a>(opts: &'a Opts<Self>, arg: &'a Arg, this: [u8; 32]) -> impl Display + 'a {
+        match &arg.ty {
+            ArgTy::I32 => "Int".to_string(),
+            ArgTy::I64 => "Long".to_string(),
+            ArgTy::F32 => "Float".to_string(),
+            ArgTy::F64 => "Double".to_string(),
+            ArgTy::Resource { ty, nullable, .. } => {
+                let base = match ty {
+                    ResTy::None => "Any".to_string(),
+                    ResTy::Of(id) => format!("P{}", hex::encode(id)),
+                    ResTy::This => format!("P{}", hex::encode(this)),
+                    _ => todo!(),
+                };
+                if *nullable {
+                    format!("Option[{base}]")
+                } else {
+                    base
+                }
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn render_meth<'a>(opts: &'a Opts<Self>, sig: &'a Sig, this: [u8; 32]) -> impl Display + 'a {
+        let params = sig
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, a)| format!("p{i}: {}", opts.ty(a, this)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let ret = if sig.rets.is_empty() {
+            "Unit".to_string()
+        } else if sig.rets.len() == 1 {
+            opts.ty(&sig.rets[0], this).to_string()
+        } else {
+            format!(
+                "({})",
+                sig.rets
+                    .iter()
+                    .map(|a| opts.ty(a, this).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        format!("({params}): {ret}")
+    }
+
+    fn render_interface<'a>(opts: &'a Opts<Self>, iface: &'a Interface) -> impl Display + 'a {
+        let hex = hex::encode(iface.rid());
+        let methods = iface
+            .methods
+            .iter()
+            .map(|(name, sig)| format!("  def {name}{}", opts.meth(sig, iface.rid())))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("trait P{hex} {{\n{methods}\n}}")
+    }
+
+    fn render_file(opts: &Opts<Self>, iface: &Interface) -> String {
+        let pkg = "pc.portal.pit.guest.scala";
+        format!(
+            "package {pkg}\n\n{}\n",
             Self::render_interface(opts, iface)
         )
     }

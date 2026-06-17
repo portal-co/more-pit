@@ -13,7 +13,7 @@ use std::{
 
 use pit_core::parse_interface;
 use pit_gen::{Backend, direct_deps, output_filename, rewrite_value};
-use pit_lang_generic::{C, Go, Haskell, Haxe, Opts, Swift, Syntax, TypeScript, TypeScriptAsync};
+use pit_lang_generic::{C, Go, Haskell, Haxe, Java, Opts, Scala, Swift, Syntax, TypeScript, TypeScriptAsync};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -38,7 +38,7 @@ fn print_help() {
          OPTIONS:\n\
          \n\
          \t--backend <BACKEND>  Target language (required)\n\
-         \t                       c | go | haxe | ts | ts-async | swift | haskell | rust\n\
+         \t                       c | go | haxe | ts | ts-async | swift | haskell | rust | java | scala\n\
          \t--out-dir <DIR>      Output directory  [default: ./generated/<backend>]\n\
          \t--pit-dir <DIR>      Scan directory for *.pit files (repeatable)\n\
          \t--prefix <PREFIX>    C type-name prefix  [default: \"\"]\n\
@@ -120,23 +120,29 @@ fn parse_args() -> Config {
 fn collect_pit_files(cfg: &Config) -> Vec<PathBuf> {
     let mut out = cfg.files.clone();
     for dir in &cfg.pit_dirs {
-        let entries = match fs::read_dir(dir) {
-            Ok(e) => e,
-            Err(e) => {
-                eprintln!("pit-gen: cannot read directory '{}': {e}", dir.display());
-                process::exit(1);
-            }
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("pit") {
-                out.push(path);
-            }
-        }
+        collect_pit_files_rec(dir, &mut out);
     }
     out.sort();
     out.dedup();
     out
+}
+
+fn collect_pit_files_rec(dir: &Path, out: &mut Vec<PathBuf>) {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("pit-gen: cannot read directory '{}': {e}", dir.display());
+            process::exit(1);
+        }
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_pit_files_rec(&path, out);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("pit") {
+            out.push(path);
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +352,8 @@ fn main() {
         Backend::Swift => generate_with_syntax::<Swift>(&cfg, &all, |_| {}),
         Backend::Haskell => generate_with_syntax::<Haskell>(&cfg, &all, |_| {}),
         Backend::Rust => generate_rust(&cfg, &all),
+        Backend::Java => generate_with_syntax::<Java>(&cfg, &all, |_| {}),
+        Backend::Scala => generate_with_syntax::<Scala>(&cfg, &all, |_| {}),
     }
 
     write_scaffold(cfg.backend, &cfg.out_dir, &all);

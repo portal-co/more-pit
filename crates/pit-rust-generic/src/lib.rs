@@ -34,7 +34,7 @@
 //! - `unstable-sdkcode` - Combined SDK and pcode support
 //! - `unstable-generics` - Enable generic parameter support
 
-use pit_core::{Arg, Interface, Sig};
+use pit_core::{Arg, ArgTy, Interface, Sig};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::token::Async;
@@ -82,17 +82,17 @@ pub struct FeatureFlags {
 pub fn arg(p: &Params, a: &Arg, root: [u8; 32]) -> TokenStream {
     let core = &p.core;
     let asyncness = &p.asyncness;
-    match a {
-        Arg::I32 => quote! {#core::primitive::u32},
-        Arg::I64 => quote! {#core::primitive::u64},
-        Arg::F32 => quote! {#core::primitive::f32},
-        Arg::F64 => quote! {#core::primitive::f64},
-        Arg::Resource {
+    match &a.ty {
+        ArgTy::I32 => quote! {#core::primitive::u32},
+        ArgTy::I64 => quote! {#core::primitive::u64},
+        ArgTy::F32 => quote! {#core::primitive::f32},
+        ArgTy::F64 => quote! {#core::primitive::f64},
+        ArgTy::Resource {
             ty,
             nullable,
             take,
-            ann,
         } => {
+            let _ann = &a.ann;
             let x = match ty {
                 pit_core::ResTy::None => {
                     return quote! {
