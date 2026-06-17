@@ -1,0 +1,6 @@
+package pc.portal.pit.guest;
+
+public interface Pbf0885d2d24ecbc6981a65f1b9a2e0bcdee0443f17ca667a8b17817a15b3e8f6 {
+  P867207405fe87fda620c2d7a5485e8e5e274636a898a166fb674448b4391ffc5 read(int p0);
+  P68da167712ddf1601aed7908c99972e62a41bdea1e28b241306a6b58d29e532d read64(long p0);
+}

@@ -21,7 +21,7 @@ use std::{
 use pit_core::{parse_interface, Arg, Interface, ResTy};
 use pit_gen::{direct_deps, output_filename, rewrite_value, Backend};
 use pit_lang_generic::{
-    C, Go, Haskell, Haxe, Opts, Swift, Syntax, TypeScript, TypeScriptAsync,
+    C, Go, Haskell, Haxe, Java, Opts, Scala, Swift, Syntax, TypeScript, TypeScriptAsync,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,5 +447,118 @@ fn test_rust_type_checks() {
             .args(["--edition", "2021", "--crate-type", "lib"])
             .arg(&lib_path),
         "Rust compile test",
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Java — compile test
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_java_type_checks() {
+    if !program_on_path("javac") {
+        eprintln!("SKIP test_java_type_checks — javac not on PATH");
+        return;
+    }
+    if !Command::new("javac")
+        .arg("-version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        eprintln!("SKIP test_java_type_checks — javac not functional");
+        return;
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let pkg_dir = dir.join("pc/portal/pit/guest");
+    fs::create_dir_all(&pkg_dir).unwrap();
+
+    let all = parse_all(&collect_pit_files(&pit_dir()));
+    generate_syntax::<Java>(Backend::Java, &all, &pkg_dir, |_| {});
+
+    let java_files: Vec<PathBuf> = all
+        .keys()
+        .map(|rid| pkg_dir.join(format!("P{}.java", hex::encode(rid))))
+        .collect();
+
+    run_ok(
+        Command::new("javac").args(&java_files),
+        "Java compile test",
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scala — compile test
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_scala_type_checks() {
+    if !program_on_path("scalac") {
+        eprintln!("SKIP test_scala_type_checks — scalac not on PATH");
+        return;
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let pkg_dir = dir.join("pc/portal/pit/guest/scala");
+    fs::create_dir_all(&pkg_dir).unwrap();
+
+    let all = parse_all(&collect_pit_files(&pit_dir()));
+    generate_syntax::<Scala>(Backend::Scala, &all, &pkg_dir, |_| {});
+
+    let scala_files: Vec<PathBuf> = all
+        .keys()
+        .map(|rid| pkg_dir.join(format!("P{}.scala", hex::encode(rid))))
+        .collect();
+
+    run_ok(
+        Command::new("scalac").args(&scala_files),
+        "Scala compile test",
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TypeScript async — compile test
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_typescript_async_type_checks() {
+    let tsc = match find_tsc() {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP test_typescript_async_type_checks — tsc not found");
+            return;
+        }
+    };
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+
+    let all = parse_all(&collect_pit_files(&pit_dir()));
+    generate_syntax::<TypeScriptAsync>(Backend::TsAsync, &all, dir, |_| {});
+
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["./*.ts"]
+}
+"#,
+    )
+    .unwrap();
+
+    run_ok(
+        Command::new(&tsc)
+            .arg("--project")
+            .arg(dir.join("tsconfig.json")),
+        "TypeScript async compile test",
     );
 }

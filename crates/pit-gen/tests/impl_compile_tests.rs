@@ -1,0 +1,179 @@
+//! Compile tests: canonical `impl/` against pit-gen generated APIs.
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+use pit_core::parse_interface;
+use pit_lang_generic::{Go, Opts, TypeScript};
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn impl_dir() -> PathBuf {
+    repo_root().join("impl")
+}
+
+fn buffer_pit() -> PathBuf {
+    repo_root().join("pit/common/buffer.pit")
+}
+
+fn program_on_path(program: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|dir| {
+            let full = dir.join(program);
+            full.is_file()
+        })
+    })
+}
+
+fn run_ok(cmd: &mut Command, label: &str) {
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("{label}: failed to spawn: {e}"));
+    if !out.status.success() {
+        panic!(
+            "{label}: exited {}\n--- stdout ---\n{}\n--- stderr ---\n{}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
+    }
+}
+
+#[test]
+fn rust_impl_compiles_with_generated_trait() {
+    run_ok(
+        Command::new("cargo")
+            .args(["test", "-p", "pit-impl-rust-fixture"])
+            .current_dir(repo_root()),
+        "rust impl nested cargo test",
+    );
+}
+
+fn find_tsc() -> Option<PathBuf> {
+    let local = repo_root().join("node_modules/.bin/tsc");
+    if local.exists() {
+        return local.canonicalize().ok();
+    }
+    std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let full = dir.join("tsc");
+            if full.is_file() {
+                Some(full)
+            } else {
+                None
+            }
+        })
+    })
+}
+
+#[test]
+fn typescript_impl_type_checks() {
+    let tsc = match find_tsc() {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP typescript_impl_type_checks — tsc not found");
+            return;
+        }
+    };
+
+    let pit_src = fs::read_to_string(buffer_pit()).expect("buffer.pit");
+    let (_, iface) = parse_interface(&pit_src).expect("parse buffer.pit");
+    let generated = Opts::<TypeScript>::default().file(&iface);
+    let hex = hex::encode(iface.rid());
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    fs::write(dir.join(format!("P{hex}.ts")), generated).unwrap();
+    fs::copy(
+        impl_dir().join("ts/buffer_slice.ts"),
+        dir.join("buffer_slice.ts"),
+    )
+    .unwrap();
+
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["./*.ts"]
+}
+"#,
+    )
+    .unwrap();
+
+    run_ok(
+        Command::new(&tsc)
+            .arg("--project")
+            .arg(dir.join("tsconfig.json")),
+        "typescript impl compile test",
+    );
+}
+
+#[test]
+fn go_impl_compiles_and_runs() {
+    if !program_on_path("go") {
+        eprintln!("SKIP go_impl_compiles_and_runs — go not on PATH");
+        return;
+    }
+
+    let pit_src = fs::read_to_string(buffer_pit()).expect("buffer.pit");
+    let (_, iface) = parse_interface(&pit_src).expect("parse buffer.pit");
+    let generated = Opts::<Go>::default().file(&iface);
+    let rid = iface.rid_str();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    fs::write(dir.join("go.mod"), "module pitimpltest\n\ngo 1.22\n").unwrap();
+    fs::write(dir.join(format!("P{rid}.go")), generated).unwrap();
+
+    let mut go_impl = fs::read_to_string(impl_dir().join("go/buffer_slice.go")).unwrap();
+    go_impl = go_impl.replace("package buffer", "package pitbindings");
+    fs::write(dir.join("buffer_slice.go"), go_impl).unwrap();
+
+    let test_go = format!(
+        r#"package pitbindings
+
+import "testing"
+
+func TestSliceBuffer(t *testing.T) {{
+    s := &SliceBuffer{{Data: []byte{{1, 2, 3}}}}
+    if got := s.P{rid}_read8(1); got != 2 {{
+        t.Fatalf("read8: got %d want 2", got)
+    }}
+    s.P{rid}_write8(0, 9)
+    if s.Data[0] != 9 {{
+        t.Fatalf("write8 failed")
+    }}
+    if got := s.P{rid}_size(); got != 3 {{
+        t.Fatalf("size: got %d want 3", got)
+    }}
+}}
+"#,
+    );
+    fs::write(dir.join("buffer_slice_test.go"), test_go).unwrap();
+
+    run_ok(
+        Command::new("go").args(["test", "./..."]).current_dir(dir),
+        "go impl compile test",
+    );
+}
+
+#[test]
+fn resource_dep_interfaces_compile_rust() {
+    run_ok(
+        Command::new("cargo")
+            .args(["check", "-p", "pit-resource-deps-fixture"])
+            .current_dir(repo_root()),
+        "rust resource-dep nested cargo check",
+    );
+}

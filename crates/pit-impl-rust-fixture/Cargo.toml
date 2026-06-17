@@ -1,0 +1,11 @@
+[package]
+name = "pit-impl-rust-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+pit-core = { workspace = true }
+pit-rust-generic = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
