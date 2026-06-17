@@ -18,6 +18,9 @@ pit-core       = { workspace = true }
 pit-lang-generic = { path = "../pit-lang-generic" }
 pit-rust-generic = { path = "../pit-rust-generic" }
 hex            = { version = "0.4.3" }
+rice           = { git = "https://github.com/portal-co/rice.git" }
+anyhow         = "1.0.86"
+embedded-io    = "0.7.1"
 proc-macro2    = { workspace = true }
 quote          = { workspace = true }
 syn            = { workspace = true }

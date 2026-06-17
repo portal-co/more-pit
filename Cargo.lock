@@ -137,6 +137,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "embedded-io"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
+
+[[package]]
+name = "embedded-io-adapters"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c900a1c087f1f7d17cdc84a1290df91521cd90933efa76d68e568385d889f2f4"
+dependencies = [
+ "embedded-io",
+]
+
+[[package]]
+name = "embedded-io-async"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
+dependencies = [
+ "embedded-io",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,12 +387,15 @@ dependencies = [
 name = "pit-gen"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "embedded-io",
  "hex",
  "pit-core",
  "pit-lang-generic",
  "pit-rust-generic",
  "proc-macro2",
  "quote",
+ "rice",
  "syn",
  "tempfile",
 ]
@@ -506,6 +533,16 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "rice"
+version = "0.1.0"
+source = "git+https://github.com/portal-co/rice.git#a9019396f0ffa818c6648ab00bd076e52a55a172"
+dependencies = [
+ "embedded-io",
+ "embedded-io-adapters",
+ "embedded-io-async",
+]
 
 [[package]]
 name = "rustc_version"
@@ -830,84 +867,76 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[patch.unused]]
-name = "dex-bytecode"
+name = "embedded-llm"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "osctx"
+name = "embedded-llm-tools"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-dex"
+name = "portal-solutions-asm-aarch64"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-link-core"
+name = "portal-solutions-asm-jvm"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-linker"
+name = "portal-solutions-asm-regalloc"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-memory"
+name = "portal-solutions-asm-riscv64"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-mips"
+name = "portal-solutions-asm-semantics"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-module-builder"
+name = "portal-solutions-asm-x86-64"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-module-target"
+name = "portal-solutions-asm-x86-64-shim"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "speet-object"
-version = "0.1.0"
+name = "portal-jsc-common"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-ordering"
-version = "0.1.0"
+name = "portal-jsc-generator"
+version = "0.8.0-pre.10"
 
 [[patch.unused]]
-name = "speet-powerpc"
-version = "0.1.0"
+name = "portal-jsc-simpl-js"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-reach"
-version = "0.1.0"
+name = "portal-jsc-swc-cfg"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-riscv"
-version = "0.1.0"
+name = "portal-jsc-swc-ll-common"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-schedule"
-version = "0.1.0"
+name = "portal-jsc-swc-opt-ssa"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-traps"
-version = "0.1.0"
+name = "portal-jsc-swc-ssa"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-wasm-helpers"
-version = "0.1.0"
+name = "portal-jsc-swc-tac"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
-name = "speet-x86_64"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "wasm-layout"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "yecta"
-version = "0.1.0"
+name = "portal-jsc-swc-util"
+version = "0.8.0-pre.11"
 
 [[patch.unused]]
 name = "ephemera"
@@ -990,40 +1019,60 @@ name = "volar-weaver"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-jsc-common"
-version = "0.8.0-pre.11"
+name = "portal-solutions-swibb"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-generator"
-version = "0.8.0-pre.10"
+name = "pit-core"
+version = "0.5.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-simpl-js"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-cfg"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-backend"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-ll-common"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-copying"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-opt-ssa"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-copying-passes"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-ssa"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-entity"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-tac"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-frontend"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
-name = "portal-jsc-swc-util"
-version = "0.8.0-pre.11"
+name = "portal-pc-waffle-fuzzing"
+version = "0.6.0-alpha.1"
+
+[[patch.unused]]
+name = "portal-pc-waffle-hooking"
+version = "0.6.0-alpha.1"
+
+[[patch.unused]]
+name = "portal-pc-waffle-ir"
+version = "0.6.0-alpha.1"
+
+[[patch.unused]]
+name = "portal-pc-waffle-lowering"
+version = "0.6.0-alpha.1"
+
+[[patch.unused]]
+name = "portal-pc-waffle-passes"
+version = "0.6.0-alpha.1"
+
+[[patch.unused]]
+name = "portal-pc-waffle-passes-shared"
+version = "0.6.0-alpha.1"
 
 [[patch.unused]]
 name = "portal-pc-asm-common"
@@ -1098,56 +1147,84 @@ name = "wax-tags"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle"
-version = "0.6.0-alpha.1"
+name = "dex-bytecode"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-backend"
-version = "0.6.0-alpha.1"
+name = "osctx"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-copying"
-version = "0.6.0-alpha.1"
+name = "speet-dex"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-copying-passes"
-version = "0.6.0-alpha.1"
+name = "speet-link-core"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-entity"
-version = "0.6.0-alpha.1"
+name = "speet-linker"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-frontend"
-version = "0.6.0-alpha.1"
+name = "speet-memory"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-fuzzing"
-version = "0.6.0-alpha.1"
+name = "speet-mips"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-hooking"
-version = "0.6.0-alpha.1"
+name = "speet-module-builder"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-ir"
-version = "0.6.0-alpha.1"
+name = "speet-module-target"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-lowering"
-version = "0.6.0-alpha.1"
+name = "speet-object"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-passes"
-version = "0.6.0-alpha.1"
+name = "speet-ordering"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-pc-waffle-passes-shared"
-version = "0.6.0-alpha.1"
+name = "speet-powerpc"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "portal-solutions-swibb"
-version = "0.6.0-alpha.1"
+name = "speet-reach"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "speet-riscv"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "speet-schedule"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "speet-traps"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "speet-wasm-helpers"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "speet-x86_64"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "wasm-layout"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "yecta"
+version = "0.1.0"
 
 [[patch.unused]]
 name = "ast-traits"
@@ -1216,35 +1293,3 @@ version = "0.2.3"
 [[patch.unused]]
 name = "type-onion"
 version = "0.2.3"
-
-[[patch.unused]]
-name = "pit-core"
-version = "0.5.0-alpha.1"
-
-[[patch.unused]]
-name = "portal-solutions-asm-aarch64"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-jvm"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-regalloc"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-riscv64"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-semantics"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-x86-64"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "portal-solutions-asm-x86-64-shim"
-version = "0.1.0"

@@ -299,6 +299,16 @@ fn write_scaffold(backend: Backend, out_dir: &Path, _all: &BTreeMap<[u8; 32], Pi
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn main() {
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(|a| a.as_str()) == Some("splice") {
+        args.remove(0);
+        if let Err(e) = run_splice(&args) {
+            eprintln!("pit-gen splice: {e}");
+            process::exit(1);
+        }
+        return;
+    }
+
     let cfg = parse_args();
 
     let pit_files = collect_pit_files(&cfg);
@@ -340,4 +350,65 @@ fn main() {
 
     write_scaffold(cfg.backend, &cfg.out_dir, &all);
     eprintln!("pit-gen: done.");
+}
+
+fn run_splice(args: &[String]) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use embedded_io::Write as EWrite;
+    use rice::Resolver;
+    use std::io::Read;
+
+    struct ImplResolver {
+        root: PathBuf,
+    }
+    impl Resolver for ImplResolver {
+        type Error = std::io::Error;
+
+        fn resolve(
+            &mut self,
+            path: &str,
+            out: &mut dyn EWrite<Error = std::io::Error>,
+        ) -> Result<(), std::io::Error> {
+            let p = path.strip_prefix('@').unwrap_or(path);
+            let file = self.root.join("impl").join(p.strip_prefix("impl/").unwrap_or(p));
+            let mut f = std::fs::File::open(&file)?;
+            let mut buf = String::new();
+            f.read_to_string(&mut buf)?;
+            out.write_all(buf.as_bytes())
+        }
+    }
+
+    struct VecWriter(Vec<u8>);
+    impl embedded_io::ErrorType for VecWriter {
+        type Error = std::io::Error;
+    }
+    impl EWrite for VecWriter {
+        fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
+            self.0.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+    }
+
+    let all = args.iter().any(|a| a == "--all");
+    let more_pit = std::env::var("MORE_PIT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."));
+    let targets: Vec<PathBuf> = if all {
+        vec![
+            PathBuf::from("generated/impl/go/buffer_slice.go"),
+            PathBuf::from("generated/impl/ts/buffer_slice.ts"),
+        ]
+    } else {
+        args.iter().filter(|a| !a.starts_with('-')).map(PathBuf::from).collect()
+    };
+    for target in targets {
+        let input = fs::read_to_string(&target).with_context(|| target.display().to_string())?;
+        let mut output = VecWriter(Vec::new());
+        rice::splice_with(&input, &mut output, ImplResolver { root: more_pit.clone() })?;
+        fs::write(&target, output.0).with_context(|| target.display().to_string())?;
+    }
+    Ok(())
 }
