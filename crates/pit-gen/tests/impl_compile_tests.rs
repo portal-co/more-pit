@@ -1,4 +1,5 @@
 //! Compile tests: canonical `impl/` against pit-gen generated APIs.
+//! Policy: [`docs/compile-tests.md`](../../../../docs/compile-tests.md)
 
 use std::{
     fs,
@@ -19,15 +20,6 @@ fn impl_dir() -> PathBuf {
 
 fn buffer_pit() -> PathBuf {
     repo_root().join("pit/common/buffer.pit")
-}
-
-fn program_on_path(program: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|path| {
-        std::env::split_paths(&path).any(|dir| {
-            let full = dir.join(program);
-            full.is_file()
-        })
-    })
 }
 
 fn run_ok(cmd: &mut Command, label: &str) {
@@ -54,32 +46,33 @@ fn rust_impl_compiles_with_generated_trait() {
     );
 }
 
-fn find_tsc() -> Option<PathBuf> {
-    let local = repo_root().join("node_modules/.bin/tsc");
-    if local.exists() {
-        return local.canonicalize().ok();
+fn require_toolchain(program: &str, install_hint: &str) -> PathBuf {
+    find_tsc_like(program).unwrap_or_else(|| {
+        panic!(
+            "compile test requires `{program}` on PATH — {install_hint}\n\
+             See docs/compile-tests.md"
+        )
+    })
+}
+
+fn find_tsc_like(program: &str) -> Option<PathBuf> {
+    if program == "tsc" {
+        let local = repo_root().join("node_modules/.bin/tsc");
+        if local.exists() {
+            return local.canonicalize().ok();
+        }
     }
     std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path).find_map(|dir| {
-            let full = dir.join("tsc");
-            if full.is_file() {
-                Some(full)
-            } else {
-                None
-            }
+            let full = dir.join(program);
+            if full.is_file() { Some(full) } else { None }
         })
     })
 }
 
 #[test]
 fn typescript_impl_type_checks() {
-    let tsc = match find_tsc() {
-        Some(p) => p,
-        None => {
-            eprintln!("SKIP typescript_impl_type_checks — tsc not found");
-            return;
-        }
-    };
+    let tsc = require_toolchain("tsc", "run `npm ci` in more-pit or install typescript globally");
 
     let pit_src = fs::read_to_string(buffer_pit()).expect("buffer.pit");
     let (_, iface) = parse_interface(&pit_src).expect("parse buffer.pit");
@@ -121,10 +114,7 @@ fn typescript_impl_type_checks() {
 
 #[test]
 fn go_impl_compiles_and_runs() {
-    if !program_on_path("go") {
-        eprintln!("SKIP go_impl_compiles_and_runs — go not on PATH");
-        return;
-    }
+    let _go = require_toolchain("go", "install Go from https://go.dev/dl/");
 
     let pit_src = fs::read_to_string(buffer_pit()).expect("buffer.pit");
     let (_, iface) = parse_interface(&pit_src).expect("parse buffer.pit");

@@ -156,9 +156,14 @@ All crates share the same optional feature set:
 ```bash
 cargo build
 cargo doc --open
+cargo test -p pit-gen -- --nocapture
 ```
 
-There are no tests (`cargo test` will run zero test cases).
+## Compile tests
+
+Compile tests in `pit-gen` invoke real language toolchains and **fail hard** when a toolchain is missing. See [`docs/compile-tests.md`](docs/compile-tests.md) for the full policy and required tools.
+
+Agents: see [`AGENTS.md`](AGENTS.md).
 
 ## License
 

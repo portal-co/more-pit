@@ -13,6 +13,7 @@ use std::{
 
 use pit_core::parse_interface;
 use pit_gen::{Backend, direct_deps, output_filename, rewrite_value};
+use pit_lang_generic::wire::FfiBackend;
 use pit_lang_generic::{C, Go, Haskell, Haxe, Java, Opts, Scala, Swift, Syntax, TypeScript, TypeScriptAsync};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ fn print_help() {
          OPTIONS:\n\
          \n\
          \t--backend <BACKEND>  Target language (required)\n\
-         \t                       c | go | haxe | ts | ts-async | swift | haskell | rust | java | scala\n\
+         \t                       c | go | haxe | ts | ts-async | swift | haskell | rust | java | scala | scala-c\n\
          \t--out-dir <DIR>      Output directory  [default: ./generated/<backend>]\n\
          \t--pit-dir <DIR>      Scan directory for *.pit files (repeatable)\n\
          \t--prefix <PREFIX>    C type-name prefix  [default: \"\"]\n\
@@ -262,6 +263,32 @@ fn generate_rust(cfg: &Config, all: &BTreeMap<[u8; 32], PitFile>) {
     eprintln!("  wrote {}", lib_path.display());
 }
 
+fn generate_scala_c(cfg: &Config, all: &BTreeMap<[u8; 32], PitFile>) {
+    use pit_scala_c_bridge::{ScalaNativeBackend, ScalaNativeContext};
+
+    fs::create_dir_all(&cfg.out_dir).unwrap_or_else(|e| {
+        eprintln!("pit-gen: cannot create '{}': {e}", cfg.out_dir.display());
+        process::exit(1);
+    });
+
+    for (rid, pf) in all {
+        let hex = hex::encode(rid);
+        let ctx = ScalaNativeContext {
+            scala_pkg: "pc.portal.pit.native",
+            c_prefix: "P",
+        };
+        for file in ScalaNativeBackend.emit_files(&pf.iface, &ctx) {
+            let out_path = cfg.out_dir.join(&file.path);
+            fs::write(&out_path, &file.content).unwrap_or_else(|e| {
+                eprintln!("pit-gen: cannot write '{}': {e}", out_path.display());
+                process::exit(1);
+            });
+            eprintln!("  wrote {}", out_path.display());
+        }
+        let _ = hex;
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Scaffold files
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,6 +381,7 @@ fn main() {
         Backend::Rust => generate_rust(&cfg, &all),
         Backend::Java => generate_with_syntax::<Java>(&cfg, &all, |_| {}),
         Backend::Scala => generate_with_syntax::<Scala>(&cfg, &all, |_| {}),
+        Backend::ScalaC => generate_scala_c(&cfg, &all),
     }
 
     write_scaffold(cfg.backend, &cfg.out_dir, &all);

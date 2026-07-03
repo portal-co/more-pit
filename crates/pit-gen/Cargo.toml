@@ -17,6 +17,7 @@ path = "src/lib.rs"
 pit-core       = { workspace = true }
 pit-lang-generic = { path = "../pit-lang-generic" }
 pit-rust-generic = { path = "../pit-rust-generic" }
+pit-scala-c-bridge = { path = "../pit-scala-c-bridge" }
 hex            = { version = "0.4.3" }
 rice           = { git = "https://github.com/portal-co/rice.git" }
 anyhow         = "1.0.86"

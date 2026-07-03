@@ -32,6 +32,7 @@ pub enum Backend {
     Rust,
     Java,
     Scala,
+    ScalaC,
 }
 
 impl Backend {
@@ -48,6 +49,7 @@ impl Backend {
             "rust" => Some(Self::Rust),
             "java" => Some(Self::Java),
             "scala" => Some(Self::Scala),
+            "scala-c" => Some(Self::ScalaC),
             _ => None,
         }
     }
@@ -65,6 +67,7 @@ impl Backend {
             Self::Rust => "rust",
             Self::Java => "java",
             Self::Scala => "scala",
+            Self::ScalaC => "scala-c",
         }
     }
 }
@@ -107,6 +110,7 @@ pub fn output_filename(backend: Backend, hex: &str) -> String {
         Backend::Rust => format!("p_{hex}.rs"),
         Backend::Java => format!("P{hex}.java"),
         Backend::Scala => format!("P{hex}.scala"),
+        Backend::ScalaC => format!("P{hex}Native.scala"),
     }
 }
 
@@ -127,5 +131,6 @@ pub fn rewrite_value(backend: Backend, dep_hex: &str) -> String {
         Backend::Rust => String::new(),    // all traits in one file
         Backend::Java => format!("pc.portal.pit.guest.P{dep_hex}"),
         Backend::Scala => format!("pc.portal.pit.guest.scala.P{dep_hex}"),
+        Backend::ScalaC => format!("pc.portal.pit.guest.scala.P{dep_hex}"),
     }
 }

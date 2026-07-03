@@ -4,7 +4,7 @@
 //! (relative path `../../pit/`) into a temporary directory, then invokes
 //! the real language compiler to type-check the output.
 //!
-//! Tests are skipped automatically when the required compiler is not on `PATH`.
+//! Compile-test policy: [`docs/compile-tests.md`](../../../../docs/compile-tests.md).
 //!
 //! Run with:
 //! ```text
@@ -106,9 +106,36 @@ fn generate_syntax<S: Syntax>(
     }
 }
 
-/// Return `true` if `program` is on PATH.
-fn program_on_path(program: &str) -> bool {
-    which(program).is_some()
+/// Panic if `program` is not on PATH. See docs/compile-tests.md.
+fn require_toolchain(program: &str, install_hint: &str) -> PathBuf {
+    which(program).unwrap_or_else(|| {
+        panic!(
+            "compile test requires `{program}` on PATH — {install_hint}\n\
+             See docs/compile-tests.md"
+        )
+    })
+}
+
+fn require_c_compiler() -> &'static str {
+    if which("cc").is_some() {
+        "cc"
+    } else if which("clang").is_some() {
+        "clang"
+    } else {
+        panic!(
+            "compile test requires `cc` or `clang` on PATH — install Xcode CLI tools or build-essential\n\
+             See docs/compile-tests.md"
+        )
+    }
+}
+
+fn require_tsc() -> PathBuf {
+    find_tsc().unwrap_or_else(|| {
+        panic!(
+            "compile test requires `tsc` — run `npm ci` at repo root or install typescript globally\n\
+             See docs/compile-tests.md"
+        )
+    })
 }
 
 fn which(program: &str) -> Option<PathBuf> {
@@ -161,14 +188,7 @@ typedef void *Any_T;
 
 #[test]
 fn test_c_type_checks() {
-    let compiler = if program_on_path("cc") {
-        "cc"
-    } else if program_on_path("clang") {
-        "clang"
-    } else {
-        eprintln!("SKIP test_c_type_checks — no C compiler on PATH");
-        return;
-    };
+    let compiler = require_c_compiler();
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -211,10 +231,7 @@ fn test_c_type_checks() {
 
 #[test]
 fn test_go_type_checks() {
-    if !program_on_path("go") {
-        eprintln!("SKIP test_go_type_checks — `go` not on PATH");
-        return;
-    }
+    require_toolchain("go", "install from https://go.dev/dl/ or `brew install go`");
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -240,10 +257,7 @@ fn test_go_type_checks() {
 
 #[test]
 fn test_haxe_type_checks() {
-    if !program_on_path("haxe") {
-        eprintln!("SKIP test_haxe_type_checks — `haxe` not on PATH");
-        return;
-    }
+    require_toolchain("haxe", "install from https://haxe.org/download/ or `brew install haxe`");
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -287,13 +301,7 @@ fn find_tsc() -> Option<PathBuf> {
 
 #[test]
 fn test_typescript_type_checks() {
-    let tsc = match find_tsc() {
-        Some(p) => p,
-        None => {
-            eprintln!("SKIP test_typescript_type_checks — `tsc` not found");
-            return;
-        }
-    };
+    let tsc = require_tsc();
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -332,10 +340,7 @@ fn test_typescript_type_checks() {
 
 #[test]
 fn test_swift_type_checks() {
-    if !program_on_path("swiftc") {
-        eprintln!("SKIP test_swift_type_checks — `swiftc` not on PATH");
-        return;
-    }
+    require_toolchain("swiftc", "install Xcode or the Swift toolchain");
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -364,10 +369,7 @@ fn test_swift_type_checks() {
 
 #[test]
 fn test_haskell_type_checks() {
-    if !program_on_path("ghc") {
-        eprintln!("SKIP test_haskell_type_checks — `ghc` not on PATH");
-        return;
-    }
+    require_toolchain("ghc", "install via GHCup or `brew install ghc`");
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -456,18 +458,17 @@ fn test_rust_type_checks() {
 
 #[test]
 fn test_java_type_checks() {
-    if !program_on_path("javac") {
-        eprintln!("SKIP test_java_type_checks — javac not on PATH");
-        return;
-    }
+    require_toolchain("javac", "install JDK (`brew install openjdk`, …)");
     if !Command::new("javac")
         .arg("-version")
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
     {
-        eprintln!("SKIP test_java_type_checks — javac not functional");
-        return;
+        panic!(
+            "compile test requires functional `javac` — JDK install may be incomplete\n\
+             See docs/compile-tests.md"
+        );
     }
 
     let tmp = tempfile::tempdir().unwrap();
@@ -495,10 +496,7 @@ fn test_java_type_checks() {
 
 #[test]
 fn test_scala_type_checks() {
-    if !program_on_path("scalac") {
-        eprintln!("SKIP test_scala_type_checks — scalac not on PATH");
-        return;
-    }
+    require_toolchain("scalac", "install Scala (`brew install scala`, SDKMAN, …)");
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
@@ -525,13 +523,7 @@ fn test_scala_type_checks() {
 
 #[test]
 fn test_typescript_async_type_checks() {
-    let tsc = match find_tsc() {
-        Some(p) => p,
-        None => {
-            eprintln!("SKIP test_typescript_async_type_checks — tsc not found");
-            return;
-        }
-    };
+    let tsc = require_tsc();
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
