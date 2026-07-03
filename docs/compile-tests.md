@@ -44,7 +44,9 @@ Agents and contributors must not weaken this pattern to restore silent skips.
 | `cc` or `clang` | `test_c_type_checks` | Xcode CLI tools, `build-essential`, … |
 | `go` | `test_go_type_checks` | [go.dev](https://go.dev/dl/) or `brew install go` |
 | `haxe` | `test_haxe_type_checks` | [haxe.org](https://haxe.org/download/) or `brew install haxe` |
-| `tsc` | TypeScript / ts-async compile tests | `npm ci` at repo root (local `node_modules/.bin/tsc`) or global TypeScript |
+| `tsc` | TypeScript, ts-async, and js-teavm adapter compile tests | `npm ci` at repo root (local `node_modules/.bin/tsc`) or global TypeScript |
+| `javac` | `pit-js-teavm` Java glue compile test (`pit-js-teavm/tests/compile_tests.rs`) | JDK (`brew install openjdk`, …) |
+| `scalac` | `pit-js-teavm` Scala glue compile test (`pit-js-teavm/tests/compile_tests.rs`) | Scala (`brew install scala`, …) |
 | `swiftc` | `test_swift_type_checks` | Xcode / Swift toolchain |
 | `ghc` | `test_haskell_type_checks` | GHCup or `brew install ghc` |
 

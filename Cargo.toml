@@ -13,6 +13,7 @@ members = [
     "crates/pit-wit-bridge",
     "crates/pit-rid",
     "crates/pit-scala-c-bridge",
+    "crates/pit-js-teavm",
     "crates/pit-impl-rust-fixture",
     "crates/pit-resource-deps-fixture",
 ]
@@ -24,6 +25,7 @@ portal-solutions-sdk = { version = "0.0.2", git = "https://github.com/portal-co/
 
 pit-lang-generic = { path = "crates/pit-lang-generic" }
 pit-scala-c-bridge = { path = "crates/pit-scala-c-bridge" }
+pit-js-teavm = { path = "crates/pit-js-teavm" }
 pit-rust-generic = { path = "crates/pit-rust-generic" }
 pit-haskell-generic = { path = "crates/pit-haskell-generic" }
 instability = "0.3.7"

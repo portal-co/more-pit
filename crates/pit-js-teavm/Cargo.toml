@@ -1,0 +1,15 @@
+[package]
+name = "pit-js-teavm"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "TeaVM JS object bridge — bidirectional P{rid} glue for Java/Scala and TypeScript without WASM wire"
+
+[dependencies]
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+pit-core.workspace = true
+pit-lang-generic = { path = "../pit-lang-generic" }
+
+[dev-dependencies]
+tempfile = "3"
+pit-gen = { path = "../pit-gen" }

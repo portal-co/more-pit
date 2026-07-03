@@ -33,6 +33,7 @@ pub enum Backend {
     Java,
     Scala,
     ScalaC,
+    JsTeavm,
 }
 
 impl Backend {
@@ -50,6 +51,7 @@ impl Backend {
             "java" => Some(Self::Java),
             "scala" => Some(Self::Scala),
             "scala-c" => Some(Self::ScalaC),
+            "js-teavm" => Some(Self::JsTeavm),
             _ => None,
         }
     }
@@ -68,6 +70,7 @@ impl Backend {
             Self::Java => "java",
             Self::Scala => "scala",
             Self::ScalaC => "scala-c",
+            Self::JsTeavm => "js-teavm",
         }
     }
 }
@@ -111,6 +114,7 @@ pub fn output_filename(backend: Backend, hex: &str) -> String {
         Backend::Java => format!("P{hex}.java"),
         Backend::Scala => format!("P{hex}.scala"),
         Backend::ScalaC => format!("P{hex}Native.scala"),
+        Backend::JsTeavm => format!("P{hex}_js.ts"),
     }
 }
 
@@ -132,5 +136,6 @@ pub fn rewrite_value(backend: Backend, dep_hex: &str) -> String {
         Backend::Java => format!("pc.portal.pit.guest.P{dep_hex}"),
         Backend::Scala => format!("pc.portal.pit.guest.scala.P{dep_hex}"),
         Backend::ScalaC => format!("pc.portal.pit.guest.scala.P{dep_hex}"),
+        Backend::JsTeavm => format!("./P{dep_hex}"),
     }
 }

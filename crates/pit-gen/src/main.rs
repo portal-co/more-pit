@@ -263,6 +263,83 @@ fn generate_rust(cfg: &Config, all: &BTreeMap<[u8; 32], PitFile>) {
     eprintln!("  wrote {}", lib_path.display());
 }
 
+fn generate_js_teavm(cfg: &Config, all: &BTreeMap<[u8; 32], PitFile>) {
+    use pit_js_teavm::{JsTeavmBackend, JsTeavmContext};
+    use pit_lang_generic::{Java, Opts, Scala, Syntax, TypeScript};
+
+    let ts_dir = cfg.out_dir.join("ts");
+    let java_dir = cfg.out_dir.join("java");
+    let scala_dir = cfg.out_dir.join("scala");
+    for dir in [&ts_dir, &java_dir, &scala_dir] {
+        fs::create_dir_all(dir).unwrap_or_else(|e| {
+            eprintln!("pit-gen: cannot create '{}': {e}", dir.display());
+            process::exit(1);
+        });
+    }
+
+    let ctx = JsTeavmContext::default();
+    let mut wrote_shared = false;
+
+    for (rid, pf) in all {
+        let hex = hex::encode(rid);
+
+        let mut ts_opts = Opts::<TypeScript>::default();
+        for dep_rid in direct_deps(&pf.iface) {
+            let dep_hex = hex::encode(dep_rid);
+            ts_opts
+                .rewrites
+                .insert(dep_rid, rewrite_value(Backend::JsTeavm, &dep_hex));
+        }
+        let ts_path = ts_dir.join(format!("P{hex}.ts"));
+        fs::write(&ts_path, ts_opts.file(&pf.iface)).unwrap_or_else(|e| {
+            eprintln!("pit-gen: cannot write '{}': {e}", ts_path.display());
+            process::exit(1);
+        });
+        eprintln!("  wrote {}", ts_path.display());
+
+        let java_path = java_dir.join(format!("P{hex}.java"));
+        fs::write(&java_path, Opts::<Java>::default().file(&pf.iface)).unwrap_or_else(|e| {
+            eprintln!("pit-gen: cannot write '{}': {e}", java_path.display());
+            process::exit(1);
+        });
+        eprintln!("  wrote {}", java_path.display());
+
+        let scala_path = scala_dir.join(format!("P{hex}.scala"));
+        fs::write(&scala_path, Opts::<Scala>::default().file(&pf.iface)).unwrap_or_else(|e| {
+            eprintln!("pit-gen: cannot write '{}': {e}", scala_path.display());
+            process::exit(1);
+        });
+        eprintln!("  wrote {}", scala_path.display());
+
+        if !wrote_shared {
+            for file in JsTeavmBackend::emit_shared_files(&ctx) {
+                let out_path = cfg.out_dir.join(&file.path);
+                if let Some(parent) = out_path.parent() {
+                    fs::create_dir_all(parent).ok();
+                }
+                fs::write(&out_path, &file.content).unwrap_or_else(|e| {
+                    eprintln!("pit-gen: cannot write '{}': {e}", out_path.display());
+                    process::exit(1);
+                });
+                eprintln!("  wrote {}", out_path.display());
+            }
+            wrote_shared = true;
+        }
+
+        for file in JsTeavmBackend::emit_interface_files(&pf.iface, &ctx) {
+            let out_path = cfg.out_dir.join(&file.path);
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            fs::write(&out_path, &file.content).unwrap_or_else(|e| {
+                eprintln!("pit-gen: cannot write '{}': {e}", out_path.display());
+                process::exit(1);
+            });
+            eprintln!("  wrote {}", out_path.display());
+        }
+    }
+}
+
 fn generate_scala_c(cfg: &Config, all: &BTreeMap<[u8; 32], PitFile>) {
     use pit_scala_c_bridge::{ScalaNativeBackend, ScalaNativeContext};
 
@@ -302,8 +379,12 @@ fn write_scaffold(backend: Backend, out_dir: &Path, _all: &BTreeMap<[u8; 32], Pi
                 eprintln!("  wrote {}", p.display());
             }
         }
-        Backend::Ts | Backend::TsAsync => {
-            let p = out_dir.join("tsconfig.json");
+        Backend::Ts | Backend::TsAsync | Backend::JsTeavm => {
+            let p = if backend == Backend::JsTeavm {
+                out_dir.join("ts/tsconfig.json")
+            } else {
+                out_dir.join("tsconfig.json")
+            };
             if !p.exists() {
                 fs::write(
                     &p,
@@ -382,6 +463,7 @@ fn main() {
         Backend::Java => generate_with_syntax::<Java>(&cfg, &all, |_| {}),
         Backend::Scala => generate_with_syntax::<Scala>(&cfg, &all, |_| {}),
         Backend::ScalaC => generate_scala_c(&cfg, &all),
+        Backend::JsTeavm => generate_js_teavm(&cfg, &all),
     }
 
     write_scaffold(cfg.backend, &cfg.out_dir, &all);

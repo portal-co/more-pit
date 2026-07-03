@@ -554,3 +554,98 @@ fn test_typescript_async_type_checks() {
         "TypeScript async compile test",
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// js-teavm — TypeScript adapter compile test
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn generate_js_teavm(all: &BTreeMap<[u8; 32], PitFile>, dir: &Path) {
+    use pit_js_teavm::{JsTeavmBackend, JsTeavmContext};
+    use pit_lang_generic::{Java, Scala, TypeScript};
+
+    let ts_dir = dir.join("ts");
+    let java_dir = dir.join("java");
+    let scala_dir = dir.join("scala");
+    for sub in [&ts_dir, &java_dir, &scala_dir] {
+        fs::create_dir_all(sub).unwrap();
+    }
+
+    let ctx = JsTeavmContext::default();
+    let mut wrote_shared = false;
+
+    for (rid, pf) in all {
+        let hex = hex::encode(rid);
+
+        let mut ts_opts = Opts::<TypeScript>::default();
+        for dep_rid in direct_deps(&pf.iface) {
+            let dep_hex = hex::encode(dep_rid);
+            ts_opts
+                .rewrites
+                .insert(dep_rid, rewrite_value(Backend::JsTeavm, &dep_hex));
+        }
+        fs::write(ts_dir.join(format!("P{hex}.ts")), ts_opts.file(&pf.iface)).unwrap();
+        fs::write(
+            java_dir.join(format!("P{hex}.java")),
+            Opts::<Java>::default().file(&pf.iface),
+        )
+        .unwrap();
+        fs::write(
+            scala_dir.join(format!("P{hex}.scala")),
+            Opts::<Scala>::default().file(&pf.iface),
+        )
+        .unwrap();
+
+        if !wrote_shared {
+            for file in JsTeavmBackend::emit_shared_files(&ctx) {
+                let out = dir.join(&file.path);
+                if let Some(parent) = out.parent() {
+                    fs::create_dir_all(parent).ok();
+                }
+                fs::write(&out, &file.content).unwrap();
+            }
+            wrote_shared = true;
+        }
+
+        for file in JsTeavmBackend::emit_interface_files(&pf.iface, &ctx) {
+            let out = dir.join(&file.path);
+            if let Some(parent) = out.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            fs::write(&out, &file.content).unwrap();
+        }
+    }
+}
+
+#[test]
+fn test_js_teavm_type_checks() {
+    let tsc = require_tsc();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+
+    let all = parse_all(&collect_pit_files(&pit_dir()));
+    generate_js_teavm(&all, dir);
+
+    fs::write(
+        dir.join("ts/tsconfig.json"),
+        r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["./*.ts"]
+}
+"#,
+    )
+    .unwrap();
+
+    run_ok(
+        Command::new(&tsc)
+            .arg("--project")
+            .arg(dir.join("ts/tsconfig.json")),
+        "js-teavm TypeScript compile test",
+    );
+}
