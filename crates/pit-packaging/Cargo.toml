@@ -1,0 +1,16 @@
+[package]
+name = "pit-packaging"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+description = "Extensible PIT packaging orchestration (guest bundles, manifests, multi-file routing)"
+
+[dependencies]
+anyhow = "1.0.86"
+pit-core.workspace = true
+pit-gen.workspace = true
+walkdir = "2"
+
+[dev-dependencies]
+pit-packaging-contrib = { path = "../pit-packaging-contrib" }
+tempfile = "3"

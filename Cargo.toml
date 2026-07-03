@@ -6,6 +6,8 @@ members = [
     "crates/pit-haxe-generic",
     "crates/pit-haskell-generic",
     "crates/pit-gen",
+    "crates/pit-packaging",
+    "crates/pit-packaging-contrib",
     "crates/pit-rust-generic",
     "crates/pit-swift-generic",
     "crates/pit-to-capnp",
@@ -24,6 +26,9 @@ pit-core = { version = "^0.5.0-alpha.1", git = "https://github.com/portal-co/pit
 portal-solutions-sdk = { version = "0.0.2", git = "https://github.com/portal-co/portal-solutions-sdk.git" }
 
 pit-lang-generic = { path = "crates/pit-lang-generic" }
+pit-gen = { path = "crates/pit-gen" }
+pit-packaging = { path = "crates/pit-packaging" }
+pit-packaging-contrib = { path = "crates/pit-packaging-contrib" }
 pit-scala-c-bridge = { path = "crates/pit-scala-c-bridge" }
 pit-js-teavm = { path = "crates/pit-js-teavm" }
 pit-rust-generic = { path = "crates/pit-rust-generic" }

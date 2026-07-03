@@ -1,0 +1,20 @@
+[package]
+name = "pit-packaging-contrib"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+description = "Default PIT packaging contributors, config, and manifest layers"
+
+[dependencies]
+anyhow = "1.0.86"
+base64 = "0.22.1"
+hex = "0.4.3"
+pit-core.workspace = true
+pit-gen.workspace = true
+pit-lang-generic.workspace = true
+pit-packaging.workspace = true
+pit-scala-c-bridge.workspace = true
+pit-js-teavm.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
