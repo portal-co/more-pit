@@ -3,15 +3,14 @@ name = "pit-haxe-generic"
 version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
-description = "Generic PIT bindings"
+description = "Generic PIT bindings for Haxe (re-exports pit-lang-generic)"
 
 [dependencies]
-hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+pit-lang-generic.workspace = true
+portal-solutions-sdk = { workspace = true, optional = true }
 
-pit-core.workspace = true
-portal-solutions-sdk = {workspace=true,optional = true}
 [features]
-unstable-sdk=["dep:portal-solutions-sdk"]
-unstable-pcode=["pit-core/unstable-pcode"]
-unstable-sdkcode=["unstable-sdk","unstable-pcode","portal-solutions-sdk/unstable-sdkcode"]
-unstable-generics=["pit-core/unstable-generics"]
+unstable-sdk      = ["dep:portal-solutions-sdk", "pit-lang-generic/unstable-sdk"]
+unstable-pcode    = ["pit-lang-generic/unstable-pcode"]
+unstable-sdkcode  = ["unstable-sdk", "unstable-pcode", "portal-solutions-sdk/unstable-sdkcode"]
+unstable-generics = ["pit-lang-generic/unstable-generics"]

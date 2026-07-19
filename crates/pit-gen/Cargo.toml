@@ -1,0 +1,32 @@
+[package]
+name = "pit-gen"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "CLI code-generator — compiles .pit interfaces to C, Go, Haxe, TypeScript, Swift, Haskell, or Rust"
+
+[[bin]]
+name = "pit-gen"
+path = "src/main.rs"
+
+[lib]
+name = "pit_gen"
+path = "src/lib.rs"
+
+[dependencies]
+pit-core       = { workspace = true }
+pit-lang-generic = { path = "../pit-lang-generic" }
+pit-rust-generic = { path = "../pit-rust-generic" }
+pit-scala-c-bridge = { path = "../pit-scala-c-bridge" }
+pit-js-teavm = { path = "../pit-js-teavm" }
+hex            = { version = "0.4.3" }
+rice           = { git = "https://github.com/portal-co/rice.git" }
+anyhow         = "1.0.86"
+embedded-io    = "0.7.1"
+proc-macro2    = { workspace = true }
+quote          = { workspace = true }
+syn            = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+pit-js-teavm = { path = "../pit-js-teavm" }
