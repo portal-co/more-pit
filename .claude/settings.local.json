@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(mkdir -p /Users/grahamkelly/Code/portal-hot/more-pit/.claude/agents/pit-language/references)",
+      "Bash(mkdir -p /Users/grahamkelly/Code/portal-hot/more-pit/.claude/agents/pit-integrations/references)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)"
+    ]
+  }
+}
