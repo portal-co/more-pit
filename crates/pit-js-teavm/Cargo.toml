@@ -8,8 +8,8 @@ description = "TeaVM JS object bridge — bidirectional P{rid} glue for Java/Sca
 [dependencies]
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pit-core.workspace = true
-pit-lang-generic = { path = "../pit-lang-generic" }
+pit-lang-generic = { git = "https://github.com/portal-co/more-pit.git" }
 
 [dev-dependencies]
 tempfile = "3"
-pit-gen = { path = "../pit-gen" }
+pit-gen = { git = "https://github.com/portal-co/more-pit.git" }

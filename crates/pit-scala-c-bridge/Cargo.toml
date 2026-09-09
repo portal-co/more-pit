@@ -8,7 +8,7 @@ description = "Scala native FFI bridge from pit-lang-generic wire layouts to C s
 [dependencies]
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pit-core.workspace = true
-pit-lang-generic = { path = "../pit-lang-generic" }
+pit-lang-generic = { git = "https://github.com/portal-co/more-pit.git" }
 
 [dev-dependencies]
 tempfile = "3"

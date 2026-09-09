@@ -15,8 +15,8 @@ path = "src/lib.rs"
 
 [dependencies]
 pit-core       = { workspace = true }
-pit-lang-generic = { path = "../pit-lang-generic" }
-pit-rust-generic = { path = "../pit-rust-generic" }
+pit-lang-generic = { git = "https://github.com/portal-co/more-pit.git" }
+pit-rust-generic = { git = "https://github.com/portal-co/more-pit.git" }
 pit-scala-c-bridge = { path = "../pit-scala-c-bridge" }
 pit-js-teavm = { path = "../pit-js-teavm" }
 hex            = { version = "0.4.3" }

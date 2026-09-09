@@ -6,7 +6,7 @@ license = "MPL-2.0"
 description = "Haskell (monad-generic) PIT code-generator — thin re-export of pit-lang-generic"
 
 [dependencies]
-pit-lang-generic = { path = "../pit-lang-generic" }
+pit-lang-generic = { git = "https://github.com/portal-co/more-pit.git" }
 
 [features]
 unstable-sdk      = ["pit-lang-generic/unstable-sdk"]
