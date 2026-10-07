@@ -44,7 +44,8 @@ Agents and contributors must not weaken this pattern to restore silent skips.
 | `cc` or `clang` | `test_c_type_checks` | Xcode CLI tools, `build-essential`, … |
 | `go` | `test_go_type_checks` | [go.dev](https://go.dev/dl/) or `brew install go` |
 | `haxe` | `test_haxe_type_checks` | [haxe.org](https://haxe.org/download/) or `brew install haxe` |
-| `tsc` | TypeScript, ts-async, and js-teavm adapter compile tests | `npm ci` at repo root (local `node_modules/.bin/tsc`) or global TypeScript |
+| `tsc` | TypeScript, ts-async, js-teavm, and `pit-sdk-bridge` generated-shim compile tests (TypeScript 5.4+) | `npm ci` at repo root (local `node_modules/.bin/tsc`) or `npm install --global typescript` |
+| `node` | `pit-sdk-bridge` generated TypeScript round-trip test | Node.js (`brew install node`, `apt install nodejs`, …) |
 | `javac` | `pit-js-teavm` Java glue compile test (`pit-js-teavm/tests/compile_tests.rs`) | JDK (`brew install openjdk`, …) |
 | `scalac` | `pit-js-teavm` Scala glue compile test (`pit-js-teavm/tests/compile_tests.rs`) | Scala (`brew install scala`, …) |
 | `swiftc` | `test_swift_type_checks` | Xcode / Swift toolchain |
@@ -57,6 +58,7 @@ Prefer `cc` over `clang` when both are present (matches existing test logic).
 ```bash
 cargo test --workspace
 cargo test -p pit-gen -- --nocapture
+cargo test -p pit-sdk-bridge --features unstable-sdk --test generated_shim_compile -- --nocapture
 ```
 
 Install the full toolchain set above before expecting a fully green run.

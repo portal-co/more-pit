@@ -2,6 +2,9 @@
 
 Instructions for coding agents working in this repository.
 
+- For PIT syntax, RIDs, attributes, or `pit-core` APIs, read [`.agents/skills/pit-language/SKILL.md`](.agents/skills/pit-language/SKILL.md).
+- For `more-pit` backends, `pit-gen`, or SDK/PIT shims, read [`.agents/skills/pit-integrations/SKILL.md`](.agents/skills/pit-integrations/SKILL.md).
+
 ## Compile tests
 
 **Read and follow [`docs/compile-tests.md`](docs/compile-tests.md).** That document is the compile-test policy. Do not restate or weaken it here.

@@ -1026,7 +1026,7 @@ impl Syntax for Java {
                     _ => todo!(),
                 };
                 if *nullable {
-                    format!("{base} | null")
+                    format!("java.util.Optional<{base}>")
                 } else {
                     base
                 }

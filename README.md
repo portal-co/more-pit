@@ -8,7 +8,7 @@ Requires Rust **nightly** (see `rust-toolchain.toml`).
 
 ## Status
 
-Early-stage / experimental. The workspace compiles and the code generators produce output, but there are no tests, no published crates, and several backends contain `todo!()` branches for uncommon type combinations. The `pit-to-capnp` and `pit-wit-bridge` crates define traits but contain no actual conversion logic — they are stubs.
+Early-stage / experimental. The workspace compiles and the code generators produce output, but there are no published crates and several backends contain `todo!()` branches for uncommon type combinations. SDK-to-PIT lowering and paired Rust/TypeScript value shims have unit, compile, and round-trip coverage; the `pit-to-capnp` and `pit-wit-bridge` crates still define traits without conversion logic.
 
 ## Workspace layout
 
@@ -16,6 +16,7 @@ Early-stage / experimental. The workspace compiles and the code generators produ
 crates/
   pit-lang-generic/   # Core multi-language backend (C, Go, Haxe, TypeScript, Swift)
   pit-rust-generic/   # Rust trait generator (proc-macro2 / quote)
+  pit-sdk-bridge/     # Feature-gated SDK lowering, value conversion runtime, and pit-sdk-gen CLI
   pit-c-generic/      # Backwards-compat re-export of pit-lang-generic::c
   pit-go-generic/     # Backwards-compat re-export of pit-lang-generic
   pit-haxe-generic/   # Backwards-compat re-export of pit-lang-generic
@@ -57,6 +58,10 @@ Implemented backends:
 | `Swift` | `open protocol P<hex> { open P<hex>_<method>(p0 _: UInt32) -> (r0 _: UInt64) }` | |
 
 Package rewrites (for Go and Haxe cross-package resource references) are configured via `Opts::rewrites: BTreeMap<[u8; 32], String>`.
+
+### pit-sdk-bridge
+
+With `unstable-sdk`, lowers `portal-solutions-sdk` schemas into one PIT interface per SDK interface, plus source/lowering metadata in PIT `Info`. Aggregates, aliases, generics, and recursive edges are tracked as metadata rather than extra PIT interfaces. It also exposes paired value converters and `pit-sdk-gen`, which emits Rust or TypeScript shims whose resource hooks are supplied by the host. PIT-only bindings continue to use `pit-gen`.
 
 ### pit-rust-generic
 
@@ -146,7 +151,7 @@ All crates share the same optional feature set:
 
 | Flag | Effect |
 |---|---|
-| `unstable-sdk` | Enable `portal-solutions-sdk` integration |
+| `unstable-sdk` | Enable `portal-solutions-sdk` integration in SDK-aware crates (including `pit-sdk-bridge` and `pit-sdk-gen`) |
 | `unstable-pcode` | Enable pcode expression support in `pit-core` |
 | `unstable-sdkcode` | Combined SDK + pcode |
 | `unstable-generics` | Generic parameter support in `pit-core` |
@@ -157,11 +162,14 @@ All crates share the same optional feature set:
 cargo build
 cargo doc --open
 cargo test -p pit-gen -- --nocapture
+cargo test -p pit-sdk-bridge --features unstable-sdk
+cargo run -p pit-sdk-bridge --features unstable-sdk --bin pit-sdk-gen -- \\
+  --root api.sdk --sdk common.sdk --backend ts --out generated/api-shim.ts
 ```
 
 ## Compile tests
 
-Compile tests in `pit-gen` invoke real language toolchains and **fail hard** when a toolchain is missing. See [`docs/compile-tests.md`](docs/compile-tests.md) for the full policy and required tools.
+Compiler-backed tests in `pit-gen` and `pit-sdk-bridge` invoke real language toolchains and **fail hard** when a toolchain is missing. See [`docs/compile-tests.md`](docs/compile-tests.md) for the full policy and required tools.
 
 Agents: see [`AGENTS.md`](AGENTS.md).
 

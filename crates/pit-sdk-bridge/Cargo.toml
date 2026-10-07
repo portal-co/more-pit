@@ -1,0 +1,28 @@
+[package]
+name = "pit-sdk-bridge"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "SDK-to-PIT schema lowering and paired Rust/TypeScript value shim generation"
+
+[[bin]]
+name = "pit-sdk-gen"
+path = "src/main.rs"
+required-features = ["unstable-sdk"]
+
+[[test]]
+name = "generated_shim_compile"
+path = "tests/generated_shim_compile.rs"
+required-features = ["unstable-sdk"]
+
+[features]
+default = []
+unstable-sdk = ["dep:hex", "dep:pit-core", "dep:portal-solutions-sdk"]
+
+[dependencies]
+hex = { version = "0.4.3", optional = true }
+pit-core = { workspace = true, optional = true }
+portal-solutions-sdk = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -447,6 +447,8 @@ fn test_rust_type_checks() {
     run_ok(
         Command::new("rustc")
             .args(["--edition", "2021", "--crate-type", "lib"])
+            .arg("--out-dir")
+            .arg(dir)
             .arg(&lib_path),
         "Rust compile test",
     );

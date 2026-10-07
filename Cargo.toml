@@ -6,6 +6,7 @@ members = [
     "crates/pit-haxe-generic",
     "crates/pit-haskell-generic",
     "crates/pit-gen",
+    "crates/pit-sdk-bridge",
     "crates/pit-packaging",
     "crates/pit-packaging-contrib",
     "crates/pit-rust-generic",
